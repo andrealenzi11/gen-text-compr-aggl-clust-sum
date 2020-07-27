@@ -3,7 +3,7 @@ from distutils.core import setup
 # read the contents of your README file
 from os import path
 content_root_directory = path.abspath(path.dirname(__file__))
-with open(path.join(content_root_directory, 'README.md'), encoding='utf-8') as f:
+with open(path.join(content_root_directory, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
 VERSION = '0.0.3'

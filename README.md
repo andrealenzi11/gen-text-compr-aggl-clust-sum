@@ -59,7 +59,6 @@ for i, topic in enumerate(topics):
 # get the topics distribution scores for each document
 corpus_transf = gtcacs_obj.get_topics_distribution_scores()
 print(corpus_transf)
-
 ```
 
 ## License
