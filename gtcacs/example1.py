@@ -1,13 +1,9 @@
-from pprint import pprint
-
 from sklearn.datasets import fetch_20newsgroups
 
-from gen_text_compr_aggl_clust_sum.GTCACS import GTCACS
+from gtcacs.GTCACS import GTCACS
 
 if __name__ == '__main__':
-
-    X_train, y_train = fetch_20newsgroups(subset='train', return_X_y=True, download_if_missing=False)
-    X_test, y_test = fetch_20newsgroups(subset='test', return_X_y=True, download_if_missing=False)
+    corpus, labels = fetch_20newsgroups(subset='all', return_X_y=True, download_if_missing=False)
     eng_stopwords = {
         'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd",
         'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers',
@@ -24,11 +20,11 @@ if __name__ == '__main__':
         'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't",
         'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"
     }
-
-    gtcacs_obj = GTCACS(num_topics=10,
-                        max_num_words=100,
+    print(len(set(labels)))
+    gtcacs_obj = GTCACS(num_topics=20,
+                        max_num_words=50,
                         max_df=0.95,
-                        min_df=10,
+                        min_df=15,
                         stopwords=eng_stopwords,
                         ngram_range=(1, 2),
                         max_features=None,
@@ -43,14 +39,15 @@ if __name__ == '__main__':
                         latent_space_dim=64,
                         discriminator_hidden_dim=256)
 
-    # Extract topic
-    gtcacs_obj.extract_topics(corpus=X_test)
+    gtcacs_obj.extract_topics(corpus=corpus)
 
     print(gtcacs_obj.corpus_transformed_shape)
 
     print("\n\n Topics words")
-    pprint(gtcacs_obj.get_topics_words())
+    topics = gtcacs_obj.get_topics_words()
+    for i, topic in enumerate(topics):
+        print(">>> TOPIC", i + 1, topic)
 
     print("\n\n Topics distribution scores")
-    pprint(gtcacs_obj.get_topics_distribution_scores())
-
+    corpus_transf = gtcacs_obj.get_topics_distribution_scores()
+    print(corpus_transf)
