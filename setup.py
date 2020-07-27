@@ -1,31 +1,37 @@
 from distutils.core import setup
 
+# read the contents of your README file
+from os import path
+content_root_directory = path.abspath(path.dirname(__file__))
+with open(path.join(content_root_directory, 'README.md'), encoding='utf-8') as f:
+    long_description = f.read()
+
+VERSION = '0.0.3'
+
 setup(
     name='gtcacs',  # How you named your package folder (MyLib)
     packages=['gtcacs'],  # Chose the same as "name"
-    version='0.0.2',
+    version=VERSION,
     license='MIT',
     description='Generative Text Compression with Agglomerative Clustering Summarization (GTCACS)',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Andrea Lenzi',
     author_email='andrealenzi11@gmail.com',
     url='https://github.com/andrealenzi11/gen-text-compr-aggl-clust-sum.git',
-    download_url='https://github.com/andrealenzi11/gen-text-compr-aggl-clust-sum/archive/0.0.1.tar.gz',
+    download_url=f'https://github.com/andrealenzi11/gen-text-compr-aggl-clust-sum/archive/{VERSION}.tar.gz',
     keywords=[
-        'topic',
+        'discussion topics',
         'topic modeling',
         'topic modelling',
         'topic extraction',
-        'topics',
-        'topics modeling',
-        'topics modelling',
-        'topics extraction',
     ],
     install_requires=[
-        'tensorflow',
-        'scikit-learn',
-        'numpy',
-        'scipy',
-        'tqdm',
+        'tensorflow==2.2.0',
+        'scikit-learn==0.23.1',
+        'numpy==1.19.1',
+        'scipy==1.4.1',
+        'tqdm==4.48.0',
     ],
     classifiers=[
         'Development Status :: 3 - Alpha',

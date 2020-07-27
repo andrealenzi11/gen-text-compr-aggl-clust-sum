@@ -1,9 +1,10 @@
 from sklearn.datasets import fetch_20newsgroups
-
-from gtcacs.GTCACS import GTCACS
+from gtcacs.topic_modeling import GTCACS
 
 if __name__ == '__main__':
+
     corpus, labels = fetch_20newsgroups(subset='all', return_X_y=True, download_if_missing=False)
+
     eng_stopwords = {
         'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd",
         'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers',
@@ -20,7 +21,7 @@ if __name__ == '__main__':
         'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't",
         'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"
     }
-    print(len(set(labels)))
+
     gtcacs_obj = GTCACS(num_topics=20,
                         max_num_words=50,
                         max_df=0.95,
@@ -40,8 +41,6 @@ if __name__ == '__main__':
                         discriminator_hidden_dim=256)
 
     gtcacs_obj.extract_topics(corpus=corpus)
-
-    print(gtcacs_obj.corpus_transformed_shape)
 
     print("\n\n Topics words")
     topics = gtcacs_obj.get_topics_words()

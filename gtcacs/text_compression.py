@@ -16,7 +16,9 @@ class Generator(tf.keras.Model):
                  gen_input_random_noise_size: int,
                  gen_hidden1_size: int,
                  gen_output_size: int):
-        """ Definition of the Generator Layers """
+        """
+            Definition of the Generator Layers
+        """
         super().__init__(name='generator')
         self.input_layer = tf.keras.layers.Dense(units=gen_input_random_noise_size,
                                                  activation=tf.nn.leaky_relu,
@@ -36,7 +38,9 @@ class Generator(tf.keras.Model):
         self.output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def call(self, input_tensor, **kwargs):
-        """ Definition of Forward Pass """
+        """
+            Definition of Forward Pass
+        """
         x = self.input_layer(input_tensor)
         x = self.input_dropout(x)
         x = self.hidden1(x)
@@ -46,7 +50,9 @@ class Generator(tf.keras.Model):
         return x
 
     def generate_noise(self, batch_size: int, random_noise_size: int):
-        """ Method for generate the startup noise input tensor of the generator """
+        """
+            Method for generate the startup noise input tensor of the generator
+        """
         return np.random.uniform(0, 1, size=(batch_size, random_noise_size))
 
 
@@ -59,7 +65,9 @@ class Discriminator(tf.keras.Model):
                  discr_decoder_input_size: int,
                  discr_decoder_hidden1_size: int,
                  discr_decoder_output_size: int):
-        """ Definition of the Discriminator Layers """
+        """
+            Definition of the Discriminator Layers
+        """
         super(Discriminator, self).__init__()
 
         ### ENCODER ###
@@ -178,20 +186,17 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.is_built = True
 
     def compute_generator_loss(self, generated_input, fake_output):
-        # mse = tf.keras.losses.MeanSquaredError()
         cos_sim = tf.keras.losses.CosineSimilarity()
         fake_loss = cos_sim(generated_input, fake_output)
         return fake_loss
 
     def compute_discriminator_loss(self, real_input, real_output, generated_input, fake_output):
-        # mse = tf.keras.losses.MeanSquaredError()
         cos_sim = tf.keras.losses.CosineSimilarity()
         real_loss = cos_sim(real_input, real_output)
         fake_loss = cos_sim(generated_input, fake_output)
         total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
         return total_loss
 
-    # @tf.function()
     def training_step(self,
                       batch: np.ndarray,
                       batch_size: int):

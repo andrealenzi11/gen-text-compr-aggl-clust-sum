@@ -8,13 +8,13 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
-from gtcacs.text_compression_NN import GenerativeTextCompressionNN
+from gtcacs.text_compression import GenerativeTextCompressionNN
 
 
 class GTCACS:
     """
         Generative Text Compression with Agglomerative Clustering Summarization (GTCACS):
-        a NLP model for topic extraction presented in the paper
+        a NLP model for topic extraction, presented in the paper
         'Therapy Analytics using a Patient-centered Perspective: an application to Hypothyroidism'
     """
 
@@ -39,25 +39,25 @@ class GTCACS:
         """
             Initialization
 
-            Attributes
+            Parameters
             ----------
-            :param num_topics:
-            :param max_num_words:
-            :param max_df:
-            :param min_df:
-            :param stopwords:
-            :param ngram_range:
-            :param lowercase:
-            :param max_features:
-            :param num_epoches:
-            :param batch_size:
-            :param gen_learning_rate:
-            :param discr_learning_rate:
-            :param random_seed_size:
-            :param generator_hidden_dim:
-            :param document_dim:
-            :param latent_space_dim:
-            :param discriminator_hidden_dim:
+            :param num_topics: number of topics
+            :param max_num_words: maximum number of terms to consider
+            :param max_df: maximum document frequency
+            :param min_df: minimum document frequency
+            :param stopwords: stopwords set
+            :param ngram_range: range for ngram
+            :param lowercase: flag for convert to lowercase
+            :param max_features: maximum number of terms to consider (max vocabulary size)
+            :param num_epoches: number of epochs
+            :param batch_size: number of documents in a batch
+            :param gen_learning_rate: learning rate for optimize the generative part
+            :param discr_learning_rate: learning rate for optimize the discriminative part
+            :param random_seed_size: dimension of generator input layer
+            :param generator_hidden_dim: dimension of generator hidden layer
+            :param document_dim: dimension of generator output layer and discriminator's input/output layer
+            :param latent_space_dim: dimension of discriminator latent space
+            :param discriminator_hidden_dim: dimension of discriminator hidden layer
         """
 
         self.num_topics = num_topics
@@ -121,12 +121,6 @@ class GTCACS:
         )
 
     def _build_compression_network(self, num_features: int):
-        """
-
-            Parameters
-            ----------
-            :param num_features:
-        """
         self.corpus_transformed_shape = num_features
         if (not self.document_dim) or (self.document_dim > self.corpus_transformed_shape):
             self.dim_red_model.build_network(num_features=self.corpus_transformed_shape)
@@ -135,11 +129,12 @@ class GTCACS:
 
     def extract_topics(self, corpus: List[str]):
         """
+            Extract topics from the corpus of documents given in input
+            (firstly call this method for fit on corpus)
 
-            Parameters
-            ----------
-            :param corpus:
+            :param corpus: list of textual documents
         """
+
         corpus_transformed = self.vectorizer_model.fit_transform(X=corpus, y=None)
         self._build_compression_network(num_features=corpus_transformed.shape[1])
         self.dim_red_model.train(dataset=corpus_transformed)
@@ -154,34 +149,24 @@ class GTCACS:
         self.is_fitted = True
 
     def _check_is_fitted(self):
-        """
-
-        """
         if not self.is_fitted:
             raise ValueError("The topics are not already extracted: call 'extract_topics' first!")
 
     def get_topics_distribution_scores(self) -> np.ndarray:
         """
-
-            :return:
+            Return the topics distribution scores in the corpus
         """
         self._check_is_fitted()
         return self.topics_distribution
 
     def get_topics_words(self) -> List[List[Tuple[str, float]]]:
         """
-            :return:
+            Return the clusters of terms representing discussion topics
         """
         self._check_is_fitted()
         return self.topics_matrix
 
     def _compute_topics_distribution(self, corpus: List[str]) -> np.ndarray:
-        """
-            Parameters
-            ----------
-            :param corpus:
-            :return:
-        """
         vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords, lowercase=self.lowercase,
                               max_df=self.max_df, min_df=self.min_df, max_features=self.max_features)
         word_tokenizer_fun = vec.build_tokenizer()
@@ -197,13 +182,6 @@ class GTCACS:
         return result
 
     def _compute_clusters_partition(self, corpus: List[str]) -> Dict[str, List[str]]:
-        """
-
-            Parameters
-            ----------
-            :param corpus:
-            :return:
-        """
         clusters_partition = dict()
         for i, label in enumerate(self.clusters_labels):
             if label in clusters_partition:
@@ -216,14 +194,6 @@ class GTCACS:
                                clusters_partition: Dict[str, List[str]],
                                terms_frequencies_map: Dict[str, int],
                                num_top_words: int = 100) -> List[List[Tuple[str, float]]]:
-        """
-            Parameters
-            ----------
-            :param clusters_partition:
-            :param terms_frequencies_map:
-            :param num_top_words:
-            :return:
-        """
         topics_matrix = []
         for label, cluster_corpus in clusters_partition.items():
             top_cluster_tokens = self._compute_top_tokens(corpus=cluster_corpus,
@@ -233,12 +203,6 @@ class GTCACS:
         return topics_matrix
 
     def _compute_terms_frequencies_map(self, corpus: List[str]) -> Dict[str, int]:
-        """
-            Parameters
-            ----------
-            :param corpus:
-            :return:
-        """
         vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords,
                               lowercase=self.lowercase, max_df=1.0, min_df=1, max_features=None, )
         vec.fit(corpus)
@@ -251,14 +215,6 @@ class GTCACS:
                             corpus: List[str],
                             terms_frequencies_map: Dict[str, int],
                             num_top_words: int) -> List[Tuple[str, float]]:
-        """
-            Parameters
-            ----------
-            :param corpus:
-            :param terms_frequencies_map:
-            :param num_top_words:
-            :return:
-        """
         vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords,
                               lowercase=self.lowercase, max_df=1.0, min_df=1, max_features=None)
         vec.fit(corpus)
