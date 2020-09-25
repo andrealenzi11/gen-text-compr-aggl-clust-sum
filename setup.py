@@ -27,7 +27,7 @@ setup(
         'topic extraction',
     ],
     install_requires=[
-        'tensorflow==2.2.0',
+        'tensorflow==2.2.1',
         'scikit-learn==0.23.1',
         'numpy==1.19.1',
         'scipy==1.4.1',
