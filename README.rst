@@ -29,7 +29,9 @@ Tested dependencies:
 
 .. code:: bash
 
+    numpy==1.19.5
     scikit-learn==0.24.1
+    scipy==1.6.1
     tensorflow==2.4.1
     tqdm==4.58.0
 
