@@ -4,16 +4,23 @@ A library for topic modeling based on the algorithm: Generative Text Compression
 
 ## Installation
 
-Install these packages first:
-```bash
-pip3 install scipy==1.4.1 numpy==1.19.1 scikit-learn==0.23.1 tensorflow==2.2.0 tqdm==4.48.0
-```
-
 Use the package manager [pip](https://pip.pypa.io/en/stable/) to install gtcacs.
-
 ```bash
 pip3 install gtcacs
 ```
+
+Tested Python version:
+```bash
+python3.8
+```
+
+Tested dependencies:
+```bash
+scikit-learn==0.24.1
+tqdm==4.58.0
+tensorflow==2.4.1
+```
+
 
 ## Usage
 

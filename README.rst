@@ -10,18 +10,28 @@ A library for topic modeling based on the algorithm:
 Installation
 ########################################################################################################
 
-Install these packages first:
-
-.. code:: bash
-
-	pip3 install scipy==1.4.1 numpy==1.19.1 scikit-learn==0.23.1 tensorflow==2.2.0 tqdm==4.48.0
-
 
 Use the package manager pip to install *gtcacs*.
 
 .. code:: bash
 
 	pip3 install gtcacs
+
+
+Tested Python version:
+
+.. code:: bash
+
+    python3.8
+
+
+Tested dependencies:
+
+.. code:: bash
+
+    scikit-learn==0.24.1
+    tensorflow==2.4.1
+    tqdm==4.58.0
 
 |
 

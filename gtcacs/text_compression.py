@@ -11,15 +11,19 @@ tf.executing_eagerly()
 
 
 class Generator(tf.keras.Model):
+    """
+        Neural Network that generates new synthetic data
+    """
 
     def __init__(self,
                  gen_input_random_noise_size: int,
                  gen_hidden1_size: int,
-                 gen_output_size: int):
+                 gen_output_size: int,
+                 **kwargs):
         """
-            Definition of the Generator Layers
+            Initialization of the Generator Layers
         """
-        super().__init__(name='generator')
+        super().__init__(name='generator', **kwargs)
         self.input_layer = tf.keras.layers.Dense(units=gen_input_random_noise_size,
                                                  activation=tf.nn.leaky_relu,
                                                  kernel_regularizer="l1",
@@ -37,9 +41,21 @@ class Generator(tf.keras.Model):
                                                   kernel_constraint=MinMaxNorm(min_value=0.0, max_value=1.0))
         self.output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'input_layer': self.input_layer,
+            'input_dropout': self.input_dropout,
+            'hidden1': self.hidden1,
+            'hidden1_dropout': self.hidden1_dropout,
+            'output_layer': self.output_layer,
+            'output_dropout': self.output_dropout,
+        })
+        return config
+
     def call(self, input_tensor, **kwargs):
         """
-            Definition of Forward Pass
+            Definition of Forward Pass for generation
         """
         x = self.input_layer(input_tensor)
         x = self.input_dropout(x)
@@ -49,7 +65,8 @@ class Generator(tf.keras.Model):
         x = self.output_dropout(x)
         return x
 
-    def generate_noise(self, batch_size: int, random_noise_size: int):
+    @staticmethod
+    def generate_noise(batch_size: int, random_noise_size: int):
         """
             Method for generate the startup noise input tensor of the generator
         """
@@ -57,6 +74,9 @@ class Generator(tf.keras.Model):
 
 
 class Discriminator(tf.keras.Model):
+    """
+        Neural Network (Auto-Encoder) for data compression
+    """
 
     def __init__(self,
                  discr_encoder_input_size: int,
@@ -64,13 +84,14 @@ class Discriminator(tf.keras.Model):
                  discr_encoder_output_size: int,
                  discr_decoder_input_size: int,
                  discr_decoder_hidden1_size: int,
-                 discr_decoder_output_size: int):
+                 discr_decoder_output_size: int,
+                 **kwargs):
         """
-            Definition of the Discriminator Layers
+            Initialization of the Discriminator Layers
         """
-        super(Discriminator, self).__init__()
+        super().__init__(name='discriminator', **kwargs)
 
-        ### ENCODER ###
+        # ==================== ENCODER ==================== #
         self.encoder_input = tf.keras.layers.InputLayer(input_shape=(discr_encoder_input_size,))  # not indispensable
         # self.encoder_noise = tf.keras.layers.GaussianNoise(stddev=discr_noise_std)
         self.encoder_input_dropout = tf.keras.layers.Dropout(rate=0.4)
@@ -86,7 +107,7 @@ class Discriminator(tf.keras.Model):
                                                     # kernel_constraint=MinMaxNorm(min_value=-1.0, max_value=1.0)
                                                     )
 
-        ### DECODER ###
+        # ==================== DECODER ==================== #
         self.decoder_input = tf.keras.layers.Input(shape=(discr_decoder_input_size,))  # not indispensable
         self.decoder_hidden1 = tf.keras.layers.Dense(units=discr_decoder_hidden1_size,
                                                      activation=tf.nn.leaky_relu,
@@ -100,7 +121,26 @@ class Discriminator(tf.keras.Model):
                                                     kernel_constraint=MinMaxNorm(min_value=0.0, max_value=1.0))
         self.decoder_output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "encoder_input": self.encoder_input,
+            "encoder_input_dropout": self.encoder_input_dropout,
+            "encoder_hidden1": self.encoder_hidden1,
+            "encoder_hidden1_dropout": self.encoder_hidden1_dropout,
+            "encoder_output": self.encoder_output,
+            "decoder_input": self.decoder_input,
+            "decoder_hidden1": self.decoder_hidden1,
+            "decoder_hidden1_dropout": self.decoder_hidden1_dropout,
+            "decoder_output": self.decoder_output,
+            "decoder_output_dropout": self.decoder_output_dropout,
+        })
+        return config
+
     def encode(self, inputs):
+        """
+            Encoding: from input samples to compressed latent spaces vectors
+        """
         x = self.encoder_input_dropout(inputs)
         x = self.encoder_hidden1(x)
         x = self.encoder_hidden1_dropout(x)
@@ -108,6 +148,9 @@ class Discriminator(tf.keras.Model):
         return x
 
     def decode(self, inputs):
+        """
+            Decoding: from compressed latent spaces vectors to reconstructed samples
+        """
         x = self.decoder_hidden1(inputs)
         x = self.decoder_hidden1_dropout(x)
         x = self.decoder_output(x)
@@ -115,6 +158,9 @@ class Discriminator(tf.keras.Model):
         return x
 
     def call(self, x_train, **kwargs):
+        """
+            Encoding and Decoding
+        """
         latent_representation = self.encode(x_train)
         output = self.decode(latent_representation)
         return output
@@ -123,7 +169,7 @@ class Discriminator(tf.keras.Model):
 class GenerativeTextCompressionNN(tf.keras.Model):
     """
         Generative Text Compression neural network:
-        a custom network for dimensional reduction of textual documents based on the concepts of GAN and autoencoder
+        a custom network for dimensional reduction of textual documents based on the concepts of GAN and auto-encoder
     """
 
     def __init__(self,
@@ -139,8 +185,9 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                  discr_encoder_output_size: int,
                  discr_decoder_input_size: int,
                  discr_decoder_hidden1_size: int,
-                 discr_decoder_output_size: int):
-        super().__init__(name="gan")
+                 discr_decoder_output_size: int,
+                 **kwargs):
+        super().__init__(name="gtc", **kwargs)
         self.num_epoches = num_epoches
         self.batch_size = batch_size
         self.gen_learning_rate = gen_learning_rate
@@ -162,6 +209,32 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.discriminator = None
         self.is_built = False
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "num_epoches": self.num_epoches,
+            "batch_size": self.batch_size,
+            "gen_learning_rate": self.gen_learning_rate,
+            "discr_learning_rate": self.discr_learning_rate,
+            "gen_input_random_noise_size": self.gen_input_random_noise_size,
+            "gen_hidden1_size": self.gen_hidden1_size,
+            "gen_output_size": self.gen_output_size,
+            "discr_encoder_input_size": self.discr_encoder_input_size,
+            "discr_encoder_hidden1_size": self.discr_encoder_hidden1_size,
+            "discr_encoder_output_size": self.discr_encoder_output_size,
+            "discr_decoder_input_size": self.discr_decoder_input_size,
+            "discr_decoder_hidden1_size": self.discr_decoder_hidden1_size,
+            "discr_decoder_output_size": self.discr_decoder_output_size,
+            "generator_optimizer": self.generator_optimizer,
+            "discriminator_optimizer": self.discriminator_optimizer,
+            "is_trained": self.is_trained,
+            "initial_random_noise": self.initial_random_noise,
+            "generator": self.generator,
+            "discriminator": self.discriminator,
+            "is_built": self.is_built,
+        })
+        return config
+
     def _set_item_size(self, num_features: int):
         self.gen_output_size = num_features
         self.discr_encoder_input_size = num_features
@@ -176,7 +249,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.generator = Generator(gen_input_random_noise_size=self.gen_input_random_noise_size,
                                    gen_hidden1_size=self.gen_hidden1_size,
                                    gen_output_size=self.gen_output_size)
-        print(self.discr_encoder_input_size)
+        logging.info(f"auto-encoder input size: {str(self.discr_encoder_input_size)}")
         self.discriminator = Discriminator(discr_encoder_input_size=self.discr_encoder_input_size,
                                            discr_encoder_hidden1_size=self.discr_encoder_hidden1_size,
                                            discr_encoder_output_size=self.discr_encoder_output_size,
@@ -185,12 +258,14 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                            discr_decoder_output_size=self.discr_decoder_output_size)
         self.is_built = True
 
-    def compute_generator_loss(self, generated_input, fake_output):
+    @staticmethod
+    def compute_generator_loss(generated_input, fake_output):
         cos_sim = tf.keras.losses.CosineSimilarity()
         fake_loss = cos_sim(generated_input, fake_output)
         return fake_loss
 
-    def compute_discriminator_loss(self, real_input, real_output, generated_input, fake_output):
+    @staticmethod
+    def compute_discriminator_loss(real_input, real_output, generated_input, fake_output):
         cos_sim = tf.keras.losses.CosineSimilarity()
         real_loss = cos_sim(real_input, real_output)
         fake_loss = cos_sim(generated_input, fake_output)
@@ -202,20 +277,20 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                       batch_size: int):
         self._check_built_status()
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-            ### Produce startup noise tensor ###
+            # === Produce startup noise tensor === #
             noise = self.generator.generate_noise(batch_size=batch_size,
                                                   random_noise_size=self.initial_random_noise)
 
-            ### Generate synthetic sample with the generator ###
+            # === Generate synthetic sample with the generator === #
             generated_batch = self.generator(noise)  # training=True
 
-            ### Calculate 'Real Output' / 'Fake Output' tensors for the discriminator ###
+            # === Calculate 'Real Output' / 'Fake Output' tensors for the discriminator === #
             real_discr_output = self.discriminator(batch)  # training=True
             # print("\n real:", real_output.numpy().shape)
             fake_discr_output = self.discriminator(generated_batch)  # training=True
             # print("\n fake:", fake_output.numpy().shape)
 
-            ### Compute Cost Functions Losses ###
+            # === Compute Cost Functions Losses === #
             generator_loss = self.compute_generator_loss(generated_input=generated_batch,
                                                          fake_output=fake_discr_output)
             discriminator_loss = self.compute_discriminator_loss(real_input=batch,
@@ -223,11 +298,11 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                                                  generated_input=generated_batch,
                                                                  fake_output=fake_discr_output)
 
-            ### Calculate Gradients ###
+            # === Calculate Gradients === #
             gradients_of_generator = gen_tape.gradient(generator_loss, self.generator.trainable_variables)
             gradients_of_discriminator = disc_tape.gradient(discriminator_loss, self.discriminator.trainable_variables)
 
-            ### Apply Gradients ###
+            # === Apply Gradients === #
             self.generator_optimizer.apply_gradients(zip(gradients_of_generator,
                                                          self.generator.trainable_variables))
             self.discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator,
