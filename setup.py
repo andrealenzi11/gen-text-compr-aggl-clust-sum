@@ -6,7 +6,7 @@ content_root_directory = path.abspath(path.dirname(__file__))
 with open(path.join(content_root_directory, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION = '0.0.4'
+VERSION = '0.0.5'
 
 setup(
     name='gtcacs',  # How you named your package folder (MyLib)
@@ -28,9 +28,11 @@ setup(
         'topic',
         'topics'
     ],
-    install_requires=[
+    setup_requires=[
         'scikit-learn==0.*',
         'tqdm==4.*',
+    ],
+    install_requires=[
         'tensorflow==2.*',
     ],
     classifiers=[
