@@ -1,11 +1,15 @@
 import logging
-from typing import List
+import math
+from collections import Counter
+from typing import List, Dict, Tuple
 
 import numpy as np
 import tensorflow as tf
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from tensorflow.python.keras.constraints import MinMaxNorm
 from tqdm import tqdm
-
 
 GTC_NN_LOGGER_NAME = "GTC"
 logger = logging.getLogger(GTC_NN_LOGGER_NAME)
@@ -31,19 +35,21 @@ class Generator(tf.keras.Model):
         super().__init__(name='generator', **kwargs)
         self.input_layer = tf.keras.layers.Dense(units=gen_input_random_noise_size,
                                                  activation=tf.nn.leaky_relu,
-                                                 kernel_regularizer="l1",
-                                                 activity_regularizer="l1")
-        self.input_dropout = tf.keras.layers.Dropout(rate=0.1)
+                                                 kernel_regularizer="l2",
+                                                 activity_regularizer="l2",
+                                                 kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+        self.input_dropout = tf.keras.layers.Dropout(rate=0.2)
         self.hidden1 = tf.keras.layers.Dense(units=gen_hidden1_size,
                                              activation=tf.nn.leaky_relu,
-                                             kernel_regularizer="l1",
-                                             activity_regularizer="l1")
-        self.hidden1_dropout = tf.keras.layers.Dropout(rate=0.2)
+                                             kernel_regularizer="l2",
+                                             activity_regularizer="l2",
+                                             kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+        self.hidden1_dropout = tf.keras.layers.Dropout(rate=0.3)
         self.output_layer = tf.keras.layers.Dense(units=gen_output_size,
                                                   activation=tf.nn.leaky_relu,
-                                                  kernel_regularizer="l1",
-                                                  activity_regularizer="l1",
-                                                  kernel_constraint=MinMaxNorm(min_value=0.0, max_value=1.0))
+                                                  kernel_regularizer="l2",
+                                                  activity_regularizer="l2",
+                                                  kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
         self.output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def get_config(self):
@@ -102,28 +108,30 @@ class Discriminator(tf.keras.Model):
         self.encoder_input_dropout = tf.keras.layers.Dropout(rate=0.4)
         self.encoder_hidden1 = tf.keras.layers.Dense(units=discr_encoder_hidden1_size,
                                                      activation=tf.nn.leaky_relu,
-                                                     kernel_regularizer="l1",
-                                                     activity_regularizer="l1")
+                                                     kernel_regularizer="l2",
+                                                     activity_regularizer="l2",
+                                                     kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
         self.encoder_hidden1_dropout = tf.keras.layers.Dropout(rate=0.1)
         self.encoder_output = tf.keras.layers.Dense(units=discr_encoder_output_size,
                                                     activation=tf.nn.leaky_relu,
-                                                    kernel_regularizer="l1",
-                                                    activity_regularizer="l1",
-                                                    # kernel_constraint=MinMaxNorm(min_value=-1.0, max_value=1.0)
+                                                    kernel_regularizer="l2",
+                                                    activity_regularizer="l2",
+                                                    kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5)
                                                     )
 
         # ==================== DECODER ==================== #
         self.decoder_input = tf.keras.layers.Input(shape=(discr_decoder_input_size,))  # not indispensable
         self.decoder_hidden1 = tf.keras.layers.Dense(units=discr_decoder_hidden1_size,
                                                      activation=tf.nn.leaky_relu,
-                                                     kernel_regularizer="l1",
-                                                     activity_regularizer="l1")
+                                                     kernel_regularizer="l2",
+                                                     activity_regularizer="l2",
+                                                     kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
         self.decoder_hidden1_dropout = tf.keras.layers.Dropout(rate=0.1)
         self.decoder_output = tf.keras.layers.Dense(units=discr_decoder_output_size,
                                                     activation=tf.nn.leaky_relu,
-                                                    kernel_regularizer="l1",
-                                                    activity_regularizer="l1",
-                                                    kernel_constraint=MinMaxNorm(min_value=0.0, max_value=1.0))
+                                                    kernel_regularizer="l2",
+                                                    activity_regularizer="l2",
+                                                    kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
         self.decoder_output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def get_config(self):
@@ -213,6 +221,11 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.generator = None
         self.discriminator = None
         self.is_built = False
+        self.current_loss = tf.keras.losses.CosineSimilarity()
+        # self.current_loss = tf.keras.losses.MeanSquaredError()
+        # self.current_loss = tf.keras.losses.Huber()
+        # self.current_loss = tf.keras.losses.LogCosh()
+        # self.current_loss = tf.keras.losses.MeanAbsoluteError()
 
     def get_config(self):
         config = super().get_config().copy()
@@ -237,6 +250,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             "generator": self.generator,
             "discriminator": self.discriminator,
             "is_built": self.is_built,
+            "current_loss": self.current_loss,
         })
         return config
 
@@ -263,19 +277,14 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                            discr_decoder_output_size=self.discr_decoder_output_size)
         self.is_built = True
 
-    @staticmethod
-    def compute_generator_loss(generated_input, fake_output):
-        cos_sim = tf.keras.losses.CosineSimilarity()
-        fake_loss = cos_sim(generated_input, fake_output)
-        return fake_loss
+    def compute_generator_loss(self, generated_input, fake_output):
+        return self.current_loss(generated_input, fake_output)
 
-    @staticmethod
-    def compute_discriminator_loss(real_input, real_output, generated_input, fake_output):
-        cos_sim = tf.keras.losses.CosineSimilarity()
-        real_loss = cos_sim(real_input, real_output)
-        fake_loss = cos_sim(generated_input, fake_output)
-        total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
-        return total_loss
+    def compute_discriminator_loss(self, real_input, real_output, generated_input, fake_output):
+        # total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
+        real_loss = self.current_loss(real_input, real_output)
+        fake_loss = self.current_loss(generated_input, fake_output)
+        return real_loss + fake_loss
 
     def training_step(self,
                       batch: np.ndarray,
@@ -329,9 +338,9 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                 epoch_generator_losses.append(generator_loss.numpy())
                 epoch_discriminator_losses.append(discriminator_loss.numpy())
             logger.info("\t\t epoch mean generator loss: " + '{:12f}'.format(np.mean(epoch_generator_losses)) +
-                         "  (-/+" + '{:12f}'.format(np.std(epoch_generator_losses)) + ")")
+                        "  (-/+" + '{:12f}'.format(np.std(epoch_generator_losses)) + ")")
             logger.info("\t\t epoch mean discriminator loss: " + '{:12f}'.format(np.mean(epoch_discriminator_losses)) +
-                         "  (-/+" + '{:12f}'.format(np.std(epoch_discriminator_losses)) + ")")
+                        "  (-/+" + '{:12f}'.format(np.std(epoch_discriminator_losses)) + ")")
         self.is_trained = True
 
     def generate_synthetic_samples(self, x_new: np.ndarray) -> np.ndarray:
@@ -347,7 +356,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             raise Exception("The autoencoder is not trained!")
         return self.discriminator.encode(x_new).numpy()
 
-    def get_latent_space2(self, x_new) -> np.ndarray:
+    def get_latent_space1(self, x_new) -> np.ndarray:
         """ Getting the compressed Latent Space of the new data given in input """
         self._check_built_status()
         if not self.is_trained:
@@ -355,19 +364,30 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         encoded_latent_space = self.discriminator.encode(x_new)
         return tf.keras.activations.softmax(encoded_latent_space, axis=-1).numpy()
 
-    def get_topics_words(self, corpus: List[str], latent_spaces: np.ndarray, num_top_words: int = 50) -> List[List[str]]:
+    def get_latent_space2(self, x_new) -> np.ndarray:
+        """ Getting the compressed Latent Space of the new data given in input """
+        self._check_built_status()
+        if not self.is_trained:
+            raise Exception("The autoencoder is not trained!")
+        encoded_latent_space = self.discriminator.encode(x_new)
+        # return tf.keras.activations.softmax(encoded_latent_space, axis=-1).numpy()
+        return encoded_latent_space.numpy()
 
-        num_topics = latent_spaces.shape[1]
+    def get_topics_words1(self,
+                          corpus: List[str],
+                          latent_spaces: np.ndarray,
+                          num_topics: int,
+                          num_top_words: int = 50) -> List[List[str]]:
 
-        words = sorted(list(set([word for doc in corpus for word in doc.split()])))   # Vocabulary words
-        word_id_map = {words[i]: i for i in range(len(words))}    # map that associate to each word its identifier
+        words = sorted(list(set([word for doc in corpus for word in doc.split()])))  # Vocabulary words
+        word_id_map = {words[i]: i for i in range(len(words))}  # map that associate to each word its identifier
         id_word_map = {i: words[i] for i in range(len(words))}  # map that associate to each identifier its word
 
-        words_df = np.zeros(shape=len(words))   # Document Frequency of each word
-        words_td = np.zeros(shape=(len(words), num_topics))   # Topics Distribution of each word
+        words_df = np.zeros(shape=len(words))  # Document Frequency of each word
+        words_td = np.zeros(shape=(len(words), num_topics))  # Topics Distribution of each word
 
         for i in range(len(corpus)):
-            doc_words = set()                # unique words of the current document
+            doc_words = set()  # unique words of the current document
             for word in corpus[i].split():
                 idx = word_id_map[word]
                 if word not in doc_words:
@@ -379,7 +399,6 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             'stephanopoulos', 'mov', 'oname', 'ptr', 'uccxkvb', 'bullock',
             'subject', 'organization', 'line', 'mail', 'software', 'power',
         ]:
-
             print(f"{w}:",
                   np.min(words_td[word_id_map[w]]),
                   np.mean(words_td[word_id_map[w]]),
@@ -389,9 +408,15 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         # print(words[:10])
         # print(words_df[:10])
 
-        words_td_normalized = words_td
-        # words_td_normalized = words_td / (np.log(words_df)[:, None] + 1)
+        # === normalization 1 === #
+        # words_td_normalized = words_td
+        words_td_normalized = words_td / (np.log(words_df)[:, None] + 1)
         # words_td_normalized = words_td / (words_df[:, None] + 1)
+
+        # === normalization 2 === #
+        words_td_normalized = words_td_normalized - words_td_normalized.mean(axis=1)[:, None]
+        print(words_td_normalized)
+        print(words_td_normalized.shape)
 
         words_td_normalized_argsorted = np.argsort(-words_td_normalized, axis=0)
         words_td_normalized_sorted = -np.sort(-words_td_normalized, axis=0)
@@ -417,7 +442,128 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         # print("---")
         # print(words_td_normalized_sorted[:num_top_words, :])
 
+    def get_topics_words2(self,
+                           corpus: List[str],
+                           latent_spaces: np.ndarray,
+                           num_topics: int,
+                           num_top_words: int = 50) -> List[List[str]]:
+        clustering_model = AgglomerativeClustering(
+            n_clusters=num_topics,
+            affinity="euclidean",
+            linkage="ward"
+        )
+        clusters_labels = clustering_model.fit_predict(X=latent_spaces, y=None)
+        print(Counter(clusters_labels), "\n")
+        terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
+        clusters_partition = self._compute_clusters_partition(corpus=corpus, clusters_labels=clusters_labels)
+        topics_matrix = self._compute_topics_matrix(clusters_partition=clusters_partition,
+                                                    terms_frequencies_map=terms_frequency_map,
+                                                    num_top_words=num_top_words)
+        result = list()
+        for i, row in enumerate(topics_matrix):
+            row_new = list()
+            for w, s in row:
+                row_new.append(w)
+            print(i+1, len(row_new), row_new)
+            result.append(row_new)
+        return result
+
+    def get_topics_words3(self,
+                           corpus: List[str],
+                           words: List[str],
+                           latent_spaces_corpus: np.ndarray,
+                           latent_spaces_words: np.ndarray,
+                           num_topics: int,
+                           num_top_words: int = 50) -> List[List[str]]:
+
+        # clustering
+        clustering_model = AgglomerativeClustering(
+            n_clusters=num_topics,
+            affinity="euclidean",
+            linkage="ward"
+        )
+        clusters_labels_corpus = clustering_model.fit_predict(X=latent_spaces_corpus, y=None)
+
+        # partition
+        label_vectors_map = dict()
+        for label, compressed_vector in zip(clusters_labels_corpus, latent_spaces_corpus):
+            try:
+                label_vectors_map[label].append(compressed_vector)
+            except KeyError:
+                label_vectors_map[label] = [compressed_vector]
+
+        # compute cluster centroid
+        centroids = list()
+        for label, vectors in label_vectors_map.items():
+            centroids.append(np.mean(vectors, axis=0))
+
+        print("words_size:", len(words))
+
+        cosine_sim_matrix = list()
+        for i, centroid_vector in enumerate(centroids):
+            print(i + 1, " | ", centroid_vector.shape)
+            cos_sim_scores = cosine_similarity(latent_spaces_words,
+                                               np.array([list(centroid_vector)])).flatten()
+            print(cos_sim_scores.shape, cos_sim_scores)
+            print("min:", round(np.min(cos_sim_scores), 4), "  |  ",
+                  "mean:", round(np.mean(cos_sim_scores), 4), "  |  ",
+                  "max:", round(np.max(cos_sim_scores), 4))
+            cosine_sim_matrix.append(cos_sim_scores)
+
+        cosine_sim_matrix = np.array(cosine_sim_matrix)
+        cosine_sim_matrix_normalized = cosine_sim_matrix - cosine_sim_matrix.mean(axis=0)[None, :]
+
+        topics_matrix = list()
+        for row in cosine_sim_matrix_normalized:
+            top_indices = np.argsort(row)[:num_top_words]
+            topic_top_words = [words[index] for index in top_indices]
+            print(topic_top_words)
+            topics_matrix.append(topic_top_words)
+
+        return topics_matrix
 
 
+    def _compute_terms_frequencies_map(self, corpus: List[str]) -> Dict[str, int]:
+        vec = CountVectorizer(ngram_range=(1, 1), stop_words='english',
+                              lowercase=True, max_df=1.0, min_df=1, max_features=None, )
+        vec.fit(corpus)
+        bag_of_words = vec.transform(corpus)
+        sum_words = bag_of_words.sum(axis=0)
+        words_freq_map = {word: sum_words[0, idx] for word, idx in vec.vocabulary_.items()}
+        return words_freq_map
 
+    def _compute_clusters_partition(self, corpus: List[str], clusters_labels) -> Dict[str, List[str]]:
+        clusters_partition = dict()
+        for i, label in enumerate(clusters_labels):
+            if label in clusters_partition:
+                clusters_partition[label].append(corpus[i])
+            else:
+                clusters_partition[label] = [corpus[i]]
+        return clusters_partition
 
+    def _compute_topics_matrix(self,
+                               clusters_partition: Dict[str, List[str]],
+                               terms_frequencies_map: Dict[str, int],
+                               num_top_words: int = 100) -> List[List[Tuple[str, float]]]:
+        topics_matrix = []
+        for label, cluster_corpus in clusters_partition.items():
+            top_cluster_tokens = self._compute_top_tokens(corpus=cluster_corpus,
+                                                          terms_frequencies_map=terms_frequencies_map,
+                                                          num_top_words=num_top_words)
+            topics_matrix.append([(token, score) for token, score in top_cluster_tokens])
+        return topics_matrix
+
+    def _compute_top_tokens(self,
+                            corpus: List[str],
+                            terms_frequencies_map: Dict[str, int],
+                            num_top_words: int) -> List[Tuple[str, float]]:
+        vec = CountVectorizer(ngram_range=(1, 1), stop_words='english',
+                              lowercase=True, max_df=0.8, min_df=5, max_features=None)
+        vec.fit(corpus)
+        bag_of_words = vec.transform(corpus)
+        sum_words = bag_of_words.sum(axis=0)
+        corpus_words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
+        corpus_words_freq_normalized = [(term, freq / math.sqrt(terms_frequencies_map[term])) for term, freq in
+                                        corpus_words_freq]
+        corpus_words_freq_normalized_sorted = sorted(corpus_words_freq_normalized, key=lambda x: x[1], reverse=True)
+        return corpus_words_freq_normalized_sorted[0:num_top_words]
