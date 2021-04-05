@@ -8,6 +8,7 @@ import tensorflow as tf
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from tensorflow.python.framework.ops import EagerTensor
 from tensorflow.python.keras.constraints import MinMaxNorm
 from tqdm import tqdm
 
@@ -33,23 +34,32 @@ class Generator(tf.keras.Model):
             Initialization of the Generator Layers
         """
         super().__init__(name='generator', **kwargs)
+        min_value = 0.
+        max_value = 1.
+        regularization_norm = "l1"
         self.input_layer = tf.keras.layers.Dense(units=gen_input_random_noise_size,
-                                                 activation=tf.nn.leaky_relu,
-                                                 kernel_regularizer="l2",
-                                                 activity_regularizer="l2",
-                                                 kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                                 activation=tf.nn.relu,  # tf.nn.leaky_relu
+                                                 kernel_regularizer=regularization_norm,
+                                                 activity_regularizer=regularization_norm,
+                                                 # kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                 #                              max_value=max_value),
+                                                 )
         self.input_dropout = tf.keras.layers.Dropout(rate=0.2)
         self.hidden1 = tf.keras.layers.Dense(units=gen_hidden1_size,
-                                             activation=tf.nn.leaky_relu,
-                                             kernel_regularizer="l2",
-                                             activity_regularizer="l2",
-                                             kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                             activation=tf.nn.relu,
+                                             kernel_regularizer=regularization_norm,
+                                             activity_regularizer=regularization_norm,
+                                             # kernel_constraint=MinMaxNorm(min_value=min_value,
+                                             #                              max_value=max_value)
+                                             )
         self.hidden1_dropout = tf.keras.layers.Dropout(rate=0.3)
         self.output_layer = tf.keras.layers.Dense(units=gen_output_size,
-                                                  activation=tf.nn.leaky_relu,
-                                                  kernel_regularizer="l2",
-                                                  activity_regularizer="l2",
-                                                  kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                                  activation=tf.nn.relu,
+                                                  kernel_regularizer=regularization_norm,
+                                                  activity_regularizer=regularization_norm,
+                                                  kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                                               max_value=max_value)
+                                                  )
         self.output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def get_config(self):
@@ -101,37 +111,48 @@ class Discriminator(tf.keras.Model):
             Initialization of the Discriminator Layers
         """
         super().__init__(name='discriminator', **kwargs)
+        min_value = 0.
+        max_value = 1.
+        regularization_norm = "l1"
 
         # ==================== ENCODER ==================== #
         self.encoder_input = tf.keras.layers.InputLayer(input_shape=(discr_encoder_input_size,))  # not indispensable
+
         # self.encoder_noise = tf.keras.layers.GaussianNoise(stddev=discr_noise_std)
         self.encoder_input_dropout = tf.keras.layers.Dropout(rate=0.4)
         self.encoder_hidden1 = tf.keras.layers.Dense(units=discr_encoder_hidden1_size,
-                                                     activation=tf.nn.leaky_relu,
-                                                     kernel_regularizer="l2",
-                                                     activity_regularizer="l2",
-                                                     kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                                     activation=tf.nn.relu,
+                                                     kernel_regularizer=regularization_norm,
+                                                     activity_regularizer=regularization_norm,
+                                                     # kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                     #                              max_value=max_value)
+                                                     )
         self.encoder_hidden1_dropout = tf.keras.layers.Dropout(rate=0.1)
         self.encoder_output = tf.keras.layers.Dense(units=discr_encoder_output_size,
-                                                    activation=tf.nn.leaky_relu,
-                                                    kernel_regularizer="l2",
-                                                    activity_regularizer="l2",
-                                                    kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5)
+                                                    activation=tf.nn.relu,
+                                                    kernel_regularizer=regularization_norm,
+                                                    activity_regularizer=regularization_norm,
+                                                    # kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                    #                              max_value=max_value)
                                                     )
 
         # ==================== DECODER ==================== #
         self.decoder_input = tf.keras.layers.Input(shape=(discr_decoder_input_size,))  # not indispensable
         self.decoder_hidden1 = tf.keras.layers.Dense(units=discr_decoder_hidden1_size,
-                                                     activation=tf.nn.leaky_relu,
-                                                     kernel_regularizer="l2",
-                                                     activity_regularizer="l2",
-                                                     kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                                     activation=tf.nn.relu,
+                                                     kernel_regularizer=regularization_norm,
+                                                     activity_regularizer=regularization_norm,
+                                                     # kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                     #                              max_value=max_value)
+                                                     )
         self.decoder_hidden1_dropout = tf.keras.layers.Dropout(rate=0.1)
         self.decoder_output = tf.keras.layers.Dense(units=discr_decoder_output_size,
-                                                    activation=tf.nn.leaky_relu,
-                                                    kernel_regularizer="l2",
-                                                    activity_regularizer="l2",
-                                                    kernel_constraint=MinMaxNorm(min_value=-0.5, max_value=0.5))
+                                                    activation=tf.nn.relu,
+                                                    kernel_regularizer=regularization_norm,
+                                                    activity_regularizer=regularization_norm,
+                                                    kernel_constraint=MinMaxNorm(min_value=min_value,
+                                                                                 max_value=max_value)
+                                                    )
         self.decoder_output_dropout = tf.keras.layers.Dropout(rate=0.4)
 
     def get_config(self):
@@ -154,10 +175,16 @@ class Discriminator(tf.keras.Model):
         """
             Encoding: from input samples to compressed latent spaces vectors
         """
+        # print(inputs.shape)
         x = self.encoder_input_dropout(inputs)
+        # print(x.shape)
         x = self.encoder_hidden1(x)
+        # print(x.shape)
         x = self.encoder_hidden1_dropout(x)
+        # print(x.shape)
         x = self.encoder_output(x)
+        # print(x.shape)
+        # print("\n")
         return x
 
     def decode(self, inputs):
@@ -221,11 +248,18 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.generator = None
         self.discriminator = None
         self.is_built = False
-        self.current_loss = tf.keras.losses.CosineSimilarity()
+        self.generator_loss = tf.keras.losses.MeanSquaredError()
+        self.discriminator_loss = tf.keras.losses.CosineSimilarity()
         # self.current_loss = tf.keras.losses.MeanSquaredError()
         # self.current_loss = tf.keras.losses.Huber()
         # self.current_loss = tf.keras.losses.LogCosh()
         # self.current_loss = tf.keras.losses.MeanAbsoluteError()
+        self.real_min_v = None
+        self.real_mean_v = None
+        self.real_max_v = None
+        self.fake_min_v = None
+        self.fake_mean_v = None
+        self.fake_max_v = None
 
     def get_config(self):
         config = super().get_config().copy()
@@ -277,17 +311,51 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                            discr_decoder_output_size=self.discr_decoder_output_size)
         self.is_built = True
 
-    def compute_generator_loss(self, generated_input, fake_output):
-        return self.current_loss(generated_input, fake_output)
+    def compute_generator_loss(self,
+                               generated_input: EagerTensor,
+                               fake_output: EagerTensor):
+        t1 = tf.concat([
+            tf.math.reduce_min(generated_input, axis=0),
+            tf.math.reduce_mean(generated_input, axis=0),
+            tf.math.reduce_variance(generated_input, axis=0),
+            tf.math.reduce_max(generated_input, axis=0),
+        ], axis=0)
+        t2 = tf.concat([
+            tf.math.reduce_min(fake_output, axis=0),
+            tf.math.reduce_mean(fake_output, axis=0),
+            tf.math.reduce_variance(fake_output, axis=0),
+            tf.math.reduce_max(fake_output, axis=0),
+        ], axis=0)
+        t3 = tf.concat([
+            tf.math.reduce_min(generated_input, axis=1),
+            tf.math.reduce_mean(generated_input, axis=1),
+            tf.math.reduce_variance(generated_input, axis=1),
+            tf.math.reduce_max(generated_input, axis=1),
+        ], axis=0)
+        t4 = tf.concat([
+            tf.math.reduce_min(fake_output, axis=1),
+            tf.math.reduce_mean(fake_output, axis=1),
+            tf.math.reduce_variance(fake_output, axis=1),
+            tf.math.reduce_max(fake_output, axis=1),
+        ], axis=0)
+        return self.generator_loss(t1, t2) + self.generator_loss(t3, t4)
 
-    def compute_discriminator_loss(self, real_input, real_output, generated_input, fake_output):
+    def compute_discriminator_loss(self,
+                                   real_input: EagerTensor,
+                                   real_output: EagerTensor,
+                                   generated_input: EagerTensor,
+                                   fake_output: EagerTensor):
         # total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
-        real_loss = self.current_loss(real_input, real_output)
-        fake_loss = self.current_loss(generated_input, fake_output)
+        # print("real_input", real_input.shape, type(real_input))
+        # print("real_output", real_output.shape, type(real_output))
+        # print("gen", generated_input.shape, type(generated_input))
+        # print("fake", fake_output.shape, type(fake_output))
+        real_loss = self.discriminator_loss(real_input, real_output)
+        fake_loss = self.discriminator_loss(generated_input, fake_output)
         return real_loss + fake_loss
 
     def training_step(self,
-                      batch: np.ndarray,
+                      batch: EagerTensor,
                       batch_size: int):
         self._check_built_status()
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
@@ -297,16 +365,22 @@ class GenerativeTextCompressionNN(tf.keras.Model):
 
             # === Generate synthetic sample with the generator === #
             generated_batch = self.generator(noise)  # training=True
+            if generated_batch.shape[0] > batch.shape[0]:
+                generated_batch = generated_batch[:batch.shape[0], :]
 
             # === Calculate 'Real Output' / 'Fake Output' tensors for the discriminator === #
             real_discr_output = self.discriminator(batch)  # training=True
-            # print("\n real:", real_output.numpy().shape)
+            self.real_min_v = tf.reduce_min(real_discr_output)
+            self.real_mean_v = tf.reduce_mean(real_discr_output)
+            self.real_max_v = tf.reduce_max(real_discr_output)
             fake_discr_output = self.discriminator(generated_batch)  # training=True
-            # print("\n fake:", fake_output.numpy().shape)
+            self.fake_min_v = tf.reduce_min(fake_discr_output)
+            self.fake_mean_v = tf.reduce_mean(fake_discr_output)
+            self.fake_max_v = tf.reduce_max(fake_discr_output)
 
             # === Compute Cost Functions Losses === #
             generator_loss = self.compute_generator_loss(generated_input=generated_batch,
-                                                         fake_output=fake_discr_output)
+                                                         fake_output=batch)  # fake_discr_output
             discriminator_loss = self.compute_discriminator_loss(real_input=batch,
                                                                  real_output=real_discr_output,
                                                                  generated_input=generated_batch,
@@ -334,6 +408,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             epoch_discriminator_losses = []
             for x in tqdm(range(0, len(dataset), self.batch_size)):
                 batch = np.array(dataset[x: x + self.batch_size, :])
+                batch = tf.convert_to_tensor(batch, dtype=tf.float64)
                 generator_loss, discriminator_loss = self.training_step(batch=batch, batch_size=self.batch_size)
                 epoch_generator_losses.append(generator_loss.numpy())
                 epoch_discriminator_losses.append(discriminator_loss.numpy())
@@ -342,6 +417,11 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             logger.info("\t\t epoch mean discriminator loss: " + '{:12f}'.format(np.mean(epoch_discriminator_losses)) +
                         "  (-/+" + '{:12f}'.format(np.std(epoch_discriminator_losses)) + ")")
         self.is_trained = True
+        print("\n values stats:")
+        print("\t - real:")
+        print("\t\t", self.real_min_v.numpy(), self.real_mean_v.numpy(), self.real_max_v.numpy())
+        print("\t - fake:")
+        print("\t\t", self.fake_min_v.numpy(), self.fake_mean_v.numpy(), self.fake_max_v.numpy())
 
     def generate_synthetic_samples(self, x_new: np.ndarray) -> np.ndarray:
         self._check_built_status()
@@ -443,14 +523,14 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         # print(words_td_normalized_sorted[:num_top_words, :])
 
     def get_topics_words2(self,
-                           corpus: List[str],
-                           latent_spaces: np.ndarray,
-                           num_topics: int,
-                           num_top_words: int = 50) -> List[List[str]]:
+                          corpus: List[str],
+                          latent_spaces: np.ndarray,
+                          num_topics: int,
+                          num_top_words: int = 50) -> List[List[str]]:
         clustering_model = AgglomerativeClustering(
             n_clusters=num_topics,
-            affinity="euclidean",
-            linkage="ward"
+            affinity="euclidean",  # "euclidean"
+            linkage="ward"  # "ward"
         )
         clusters_labels = clustering_model.fit_predict(X=latent_spaces, y=None)
         print(Counter(clusters_labels), "\n")
@@ -464,23 +544,23 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             row_new = list()
             for w, s in row:
                 row_new.append(w)
-            print(i+1, len(row_new), row_new)
+            print(i + 1, len(row_new), row_new)
             result.append(row_new)
         return result
 
     def get_topics_words3(self,
-                           corpus: List[str],
-                           words: List[str],
-                           latent_spaces_corpus: np.ndarray,
-                           latent_spaces_words: np.ndarray,
-                           num_topics: int,
-                           num_top_words: int = 50) -> List[List[str]]:
+                          corpus: List[str],
+                          words: List[str],
+                          latent_spaces_corpus: np.ndarray,
+                          latent_spaces_words: np.ndarray,
+                          num_topics: int,
+                          num_top_words: int = 50) -> List[List[str]]:
 
         # clustering
         clustering_model = AgglomerativeClustering(
             n_clusters=num_topics,
-            affinity="euclidean",
-            linkage="ward"
+            affinity="cosine",
+            linkage="average"
         )
         clusters_labels_corpus = clustering_model.fit_predict(X=latent_spaces_corpus, y=None)
 
@@ -498,7 +578,6 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             centroids.append(np.mean(vectors, axis=0))
 
         print("words_size:", len(words))
-
         cosine_sim_matrix = list()
         for i, centroid_vector in enumerate(centroids):
             print(i + 1, " | ", centroid_vector.shape)
@@ -521,6 +600,56 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             topics_matrix.append(topic_top_words)
 
         return topics_matrix
+
+    def get_topics_words4(self,
+                          corpus: List[str],
+                          latent_spaces: np.ndarray,
+                          num_topics: int,
+                          keyed_vectors,
+                          num_top_words: int = 50) -> List[List[str]]:
+        clustering_model = AgglomerativeClustering(
+            n_clusters=num_topics,
+            affinity="euclidean",  # "euclidean"
+            linkage="ward"  # "ward"
+        )
+        clusters_labels = clustering_model.fit_predict(X=latent_spaces, y=None)
+        print(Counter(clusters_labels), "\n")
+        terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
+        clusters_partition = self._compute_clusters_partition(corpus=corpus, clusters_labels=clusters_labels)
+        factor = 3
+        topics_matrix = self._compute_topics_matrix(clusters_partition=clusters_partition,
+                                                    terms_frequencies_map=terms_frequency_map,
+                                                    num_top_words=num_top_words * factor)
+        result = list()
+        for i, row in enumerate(topics_matrix):
+            row_new = list()
+            for w, s in row:
+                row_new.append(w)
+            print(i + 1, len(row_new), row_new)
+            result.append(row_new)
+
+        result2 = list()
+        for i, topic in enumerate(result):
+            original_size = len(topic)
+            topic = [word for word in topic.copy() if word in keyed_vectors.vocab]
+            print("\n", i+1, len(topic), " / ", original_size)
+
+            while len(topic) > num_top_words:
+                topic.remove(keyed_vectors.doesnt_match(words=topic))
+            result2.append(topic)
+
+            # while len(topic) > num_top_words - 10:
+            #     topic.remove(keyed_vectors.doesnt_match(words=topic))
+            # most_similar_words = keyed_vectors.most_similar(positive=topic, negative=None, topn=10)
+            # print(most_similar_words)
+            # for w, s in most_similar_words:
+            #     topic.append(w)
+            # result2.append(topic)
+
+        print(result2)
+        print([len(row) for row in result2])
+
+        return result2
 
 
     def _compute_terms_frequencies_map(self, corpus: List[str]) -> Dict[str, int]:
