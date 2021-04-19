@@ -1,7 +1,7 @@
 import logging
 import math
 from collections import Counter
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Sequence
 
 import numpy as np
 import tensorflow as tf
@@ -429,184 +429,160 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             raise Exception("The Generative Adversarial Network is not trained!")
         return self.generator(x_new).numpy()
 
-    def get_latent_space(self, x_new) -> np.ndarray:
+    def get_latent_space(self,
+                         x_new: Sequence[str],
+                         apply_softmax: bool = False) -> np.ndarray:
         """ Getting the compressed Latent Space of the new data given in input """
         self._check_built_status()
         if not self.is_trained:
-            raise Exception("The autoencoder is not trained!")
-        return self.discriminator.encode(x_new).numpy()
-
-    def get_latent_space1(self, x_new) -> np.ndarray:
-        """ Getting the compressed Latent Space of the new data given in input """
-        self._check_built_status()
-        if not self.is_trained:
-            raise Exception("The autoencoder is not trained!")
+            raise Exception("The auto-encoder is not trained!")
         encoded_latent_space = self.discriminator.encode(x_new)
-        return tf.keras.activations.softmax(encoded_latent_space, axis=-1).numpy()
+        if apply_softmax:
+            return tf.keras.activations.softmax(encoded_latent_space, axis=-1).numpy()
+        else:
+            return encoded_latent_space.numpy()
 
-    def get_latent_space2(self, x_new) -> np.ndarray:
-        """ Getting the compressed Latent Space of the new data given in input """
-        self._check_built_status()
-        if not self.is_trained:
-            raise Exception("The autoencoder is not trained!")
-        encoded_latent_space = self.discriminator.encode(x_new)
-        # return tf.keras.activations.softmax(encoded_latent_space, axis=-1).numpy()
-        return encoded_latent_space.numpy()
+    # def get_topics_words1(self,
+    #                       corpus: List[str],
+    #                       latent_spaces: np.ndarray,
+    #                       num_topics: int,
+    #                       num_top_words: int = 50) -> List[List[str]]:
+    #
+    #     words = sorted(list(set([word for doc in corpus for word in doc.split()])))  # Vocabulary words
+    #     word_id_map = {words[i]: i for i in range(len(words))}  # map that associate to each word its identifier
+    #     id_word_map = {i: words[i] for i in range(len(words))}  # map that associate to each identifier its word
+    #
+    #     words_df = np.zeros(shape=len(words))  # Document Frequency of each word
+    #     words_td = np.zeros(shape=(len(words), num_topics))  # Topics Distribution of each word
+    #
+    #     for i in range(len(corpus)):
+    #         doc_words = set()  # unique words of the current document
+    #         for word in corpus[i].split():
+    #             idx = word_id_map[word]
+    #             if word not in doc_words:
+    #                 words_df[idx] += 1
+    #                 doc_words.add(word)
+    #             words_td[idx] += latent_spaces[i]
+    #
+    #     for w in [
+    #         'stephanopoulos', 'mov', 'oname', 'ptr', 'uccxkvb', 'bullock',
+    #         'subject', 'organization', 'line', 'mail', 'software', 'power',
+    #     ]:
+    #         print(f"{w}:",
+    #               np.min(words_td[word_id_map[w]]),
+    #               np.mean(words_td[word_id_map[w]]),
+    #               np.max(words_td[word_id_map[w]]))
+    #     # === normalization 1 === #
+    #     words_td_normalized = words_td / (np.log(words_df)[:, None] + 1)
+    #
+    #     # === normalization 2 === #
+    #     words_td_normalized = words_td_normalized - words_td_normalized.mean(axis=1)[:, None]
+    #
+    #     words_td_normalized_argsorted = np.argsort(-words_td_normalized, axis=0)
+    #     words_td_normalized_sorted = -np.sort(-words_td_normalized, axis=0)
+    #
+    #     topics_ids_matrix = words_td_normalized_argsorted.transpose()[:, :num_top_words]
+    #     print(topics_ids_matrix.shape)
+    #
+    #     topics_matrix = np.full(shape=(topics_ids_matrix.shape[0], topics_ids_matrix.shape[1]),
+    #                             fill_value="",
+    #                             dtype=np.object)
+    #     print(topics_matrix.shape)
+    #     print(len(word_id_map))
+    #
+    #     for i in range(topics_ids_matrix.shape[0]):
+    #         for j in range(topics_ids_matrix.shape[1]):
+    #             idx = topics_ids_matrix[i, j]
+    #             topics_matrix[i, j] = id_word_map[idx]
+    #
+    #     print(topics_matrix)
+    #     return topics_matrix
 
-    def get_topics_words1(self,
-                          corpus: List[str],
-                          latent_spaces: np.ndarray,
-                          num_topics: int,
-                          num_top_words: int = 50) -> List[List[str]]:
+    # def get_topics_words2(self,
+    #                       corpus: List[str],
+    #                       latent_spaces: np.ndarray,
+    #                       num_topics: int,
+    #                       num_top_words: int = 50) -> List[List[str]]:
+    #     clustering_model = AgglomerativeClustering(
+    #         n_clusters=num_topics,
+    #         affinity="euclidean",  # "euclidean"
+    #         linkage="ward"  # "ward"
+    #     )
+    #     clusters_labels = clustering_model.fit_predict(X=latent_spaces, y=None)
+    #     print(Counter(clusters_labels), "\n")
+    #     terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
+    #     clusters_partition = self._compute_clusters_partition(corpus=corpus, clusters_labels=clusters_labels)
+    #     topics_matrix = self._compute_topics_matrix(clusters_partition=clusters_partition,
+    #                                                 terms_frequencies_map=terms_frequency_map,
+    #                                                 num_top_words=num_top_words)
+    #     result = list()
+    #     for i, row in enumerate(topics_matrix):
+    #         row_new = list()
+    #         for w, s in row:
+    #             row_new.append(w)
+    #         print(i + 1, len(row_new), row_new)
+    #         result.append(row_new)
+    #     return result
 
-        words = sorted(list(set([word for doc in corpus for word in doc.split()])))  # Vocabulary words
-        word_id_map = {words[i]: i for i in range(len(words))}  # map that associate to each word its identifier
-        id_word_map = {i: words[i] for i in range(len(words))}  # map that associate to each identifier its word
+    # def get_topics_words3(self,
+    #                       corpus: List[str],
+    #                       words: List[str],
+    #                       latent_spaces_corpus: np.ndarray,
+    #                       latent_spaces_words: np.ndarray,
+    #                       num_topics: int,
+    #                       num_top_words: int = 50) -> List[List[str]]:
+    #
+    #     # clustering
+    #     clustering_model = AgglomerativeClustering(
+    #         n_clusters=num_topics,
+    #         affinity="cosine",
+    #         linkage="average"
+    #     )
+    #     clusters_labels_corpus = clustering_model.fit_predict(X=latent_spaces_corpus, y=None)
+    #
+    #     # partition
+    #     label_vectors_map = dict()
+    #     for label, compressed_vector in zip(clusters_labels_corpus, latent_spaces_corpus):
+    #         try:
+    #             label_vectors_map[label].append(compressed_vector)
+    #         except KeyError:
+    #             label_vectors_map[label] = [compressed_vector]
+    #
+    #     # compute cluster centroid
+    #     centroids = list()
+    #     for label, vectors in label_vectors_map.items():
+    #         centroids.append(np.mean(vectors, axis=0))
+    #
+    #     print("words_size:", len(words))
+    #     cosine_sim_matrix = list()
+    #     for i, centroid_vector in enumerate(centroids):
+    #         print(i + 1, " | ", centroid_vector.shape)
+    #         cos_sim_scores = cosine_similarity(latent_spaces_words,
+    #                                            np.array([list(centroid_vector)])).flatten()
+    #         print(cos_sim_scores.shape, cos_sim_scores)
+    #         print("min:", round(np.min(cos_sim_scores), 4), "  |  ",
+    #               "mean:", round(np.mean(cos_sim_scores), 4), "  |  ",
+    #               "max:", round(np.max(cos_sim_scores), 4))
+    #         cosine_sim_matrix.append(cos_sim_scores)
+    #
+    #     cosine_sim_matrix = np.array(cosine_sim_matrix)
+    #     cosine_sim_matrix_normalized = cosine_sim_matrix - cosine_sim_matrix.mean(axis=0)[None, :]
+    #
+    #     topics_matrix = list()
+    #     for row in cosine_sim_matrix_normalized:
+    #         top_indices = np.argsort(row)[:num_top_words]
+    #         topic_top_words = [words[index] for index in top_indices]
+    #         print(topic_top_words)
+    #         topics_matrix.append(topic_top_words)
+    #
+    #     return topics_matrix
 
-        words_df = np.zeros(shape=len(words))  # Document Frequency of each word
-        words_td = np.zeros(shape=(len(words), num_topics))  # Topics Distribution of each word
-
-        for i in range(len(corpus)):
-            doc_words = set()  # unique words of the current document
-            for word in corpus[i].split():
-                idx = word_id_map[word]
-                if word not in doc_words:
-                    words_df[idx] += 1
-                    doc_words.add(word)
-                words_td[idx] += latent_spaces[i]
-
-        for w in [
-            'stephanopoulos', 'mov', 'oname', 'ptr', 'uccxkvb', 'bullock',
-            'subject', 'organization', 'line', 'mail', 'software', 'power',
-        ]:
-            print(f"{w}:",
-                  np.min(words_td[word_id_map[w]]),
-                  np.mean(words_td[word_id_map[w]]),
-                  np.max(words_td[word_id_map[w]]))
-
-        # print(words_td[:10])
-        # print(words[:10])
-        # print(words_df[:10])
-
-        # === normalization 1 === #
-        # words_td_normalized = words_td
-        words_td_normalized = words_td / (np.log(words_df)[:, None] + 1)
-        # words_td_normalized = words_td / (words_df[:, None] + 1)
-
-        # === normalization 2 === #
-        words_td_normalized = words_td_normalized - words_td_normalized.mean(axis=1)[:, None]
-        print(words_td_normalized)
-        print(words_td_normalized.shape)
-
-        words_td_normalized_argsorted = np.argsort(-words_td_normalized, axis=0)
-        words_td_normalized_sorted = -np.sort(-words_td_normalized, axis=0)
-
-        topics_ids_matrix = words_td_normalized_argsorted.transpose()[:, :num_top_words]
-        print(topics_ids_matrix.shape)
-
-        topics_matrix = np.full(shape=(topics_ids_matrix.shape[0], topics_ids_matrix.shape[1]),
-                                fill_value="",
-                                dtype=np.object)
-        print(topics_matrix.shape)
-        print(len(word_id_map))
-
-        for i in range(topics_ids_matrix.shape[0]):
-            for j in range(topics_ids_matrix.shape[1]):
-                idx = topics_ids_matrix[i, j]
-                topics_matrix[i, j] = id_word_map[idx]
-
-        print(topics_matrix)
-        return topics_matrix
-
-        # print(words_td_normalized_argsorted[:num_top_words, :])
-        # print("---")
-        # print(words_td_normalized_sorted[:num_top_words, :])
-
-    def get_topics_words2(self,
-                          corpus: List[str],
-                          latent_spaces: np.ndarray,
-                          num_topics: int,
-                          num_top_words: int = 50) -> List[List[str]]:
-        clustering_model = AgglomerativeClustering(
-            n_clusters=num_topics,
-            affinity="euclidean",  # "euclidean"
-            linkage="ward"  # "ward"
-        )
-        clusters_labels = clustering_model.fit_predict(X=latent_spaces, y=None)
-        print(Counter(clusters_labels), "\n")
-        terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
-        clusters_partition = self._compute_clusters_partition(corpus=corpus, clusters_labels=clusters_labels)
-        topics_matrix = self._compute_topics_matrix(clusters_partition=clusters_partition,
-                                                    terms_frequencies_map=terms_frequency_map,
-                                                    num_top_words=num_top_words)
-        result = list()
-        for i, row in enumerate(topics_matrix):
-            row_new = list()
-            for w, s in row:
-                row_new.append(w)
-            print(i + 1, len(row_new), row_new)
-            result.append(row_new)
-        return result
-
-    def get_topics_words3(self,
-                          corpus: List[str],
-                          words: List[str],
-                          latent_spaces_corpus: np.ndarray,
-                          latent_spaces_words: np.ndarray,
-                          num_topics: int,
-                          num_top_words: int = 50) -> List[List[str]]:
-
-        # clustering
-        clustering_model = AgglomerativeClustering(
-            n_clusters=num_topics,
-            affinity="cosine",
-            linkage="average"
-        )
-        clusters_labels_corpus = clustering_model.fit_predict(X=latent_spaces_corpus, y=None)
-
-        # partition
-        label_vectors_map = dict()
-        for label, compressed_vector in zip(clusters_labels_corpus, latent_spaces_corpus):
-            try:
-                label_vectors_map[label].append(compressed_vector)
-            except KeyError:
-                label_vectors_map[label] = [compressed_vector]
-
-        # compute cluster centroid
-        centroids = list()
-        for label, vectors in label_vectors_map.items():
-            centroids.append(np.mean(vectors, axis=0))
-
-        print("words_size:", len(words))
-        cosine_sim_matrix = list()
-        for i, centroid_vector in enumerate(centroids):
-            print(i + 1, " | ", centroid_vector.shape)
-            cos_sim_scores = cosine_similarity(latent_spaces_words,
-                                               np.array([list(centroid_vector)])).flatten()
-            print(cos_sim_scores.shape, cos_sim_scores)
-            print("min:", round(np.min(cos_sim_scores), 4), "  |  ",
-                  "mean:", round(np.mean(cos_sim_scores), 4), "  |  ",
-                  "max:", round(np.max(cos_sim_scores), 4))
-            cosine_sim_matrix.append(cos_sim_scores)
-
-        cosine_sim_matrix = np.array(cosine_sim_matrix)
-        cosine_sim_matrix_normalized = cosine_sim_matrix - cosine_sim_matrix.mean(axis=0)[None, :]
-
-        topics_matrix = list()
-        for row in cosine_sim_matrix_normalized:
-            top_indices = np.argsort(row)[:num_top_words]
-            topic_top_words = [words[index] for index in top_indices]
-            print(topic_top_words)
-            topics_matrix.append(topic_top_words)
-
-        return topics_matrix
-
-    def get_topics_words4(self,
-                          corpus: List[str],
-                          latent_spaces: np.ndarray,
-                          num_topics: int,
-                          keyed_vectors,
-                          num_top_words: int = 50) -> List[List[str]]:
+    def get_topics_words_final(self,
+                               corpus: List[str],
+                               latent_spaces: np.ndarray,
+                               num_topics: int,
+                               keyed_vectors,
+                               num_top_words: int = 50) -> List[List[str]]:
         clustering_model = AgglomerativeClustering(
             n_clusters=num_topics,
             affinity="euclidean",  # "euclidean"
@@ -632,8 +608,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         for i, topic in enumerate(result):
             original_size = len(topic)
             topic = [word for word in topic.copy() if word in keyed_vectors.vocab]
-            print("\n", i+1, len(topic), " / ", original_size)
-
+            print(i + 1, ")  words in vocabulary: ", len(topic), " / ", original_size)
             while len(topic) > num_top_words:
                 topic.remove(keyed_vectors.doesnt_match(words=topic))
             result2.append(topic)
@@ -651,8 +626,8 @@ class GenerativeTextCompressionNN(tf.keras.Model):
 
         return result2
 
-
-    def _compute_terms_frequencies_map(self, corpus: List[str]) -> Dict[str, int]:
+    @staticmethod
+    def _compute_terms_frequencies_map(corpus: List[str]) -> Dict[str, int]:
         vec = CountVectorizer(ngram_range=(1, 1), stop_words='english',
                               lowercase=True, max_df=1.0, min_df=1, max_features=None, )
         vec.fit(corpus)
@@ -661,7 +636,8 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         words_freq_map = {word: sum_words[0, idx] for word, idx in vec.vocabulary_.items()}
         return words_freq_map
 
-    def _compute_clusters_partition(self, corpus: List[str], clusters_labels) -> Dict[str, List[str]]:
+    @staticmethod
+    def _compute_clusters_partition(corpus: List[str], clusters_labels) -> Dict[str, List[str]]:
         clusters_partition = dict()
         for i, label in enumerate(clusters_labels):
             if label in clusters_partition:
@@ -682,8 +658,8 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             topics_matrix.append([(token, score) for token, score in top_cluster_tokens])
         return topics_matrix
 
-    def _compute_top_tokens(self,
-                            corpus: List[str],
+    @staticmethod
+    def _compute_top_tokens(corpus: List[str],
                             terms_frequencies_map: Dict[str, int],
                             num_top_words: int) -> List[Tuple[str, float]]:
         vec = CountVectorizer(ngram_range=(1, 1), stop_words='english',
