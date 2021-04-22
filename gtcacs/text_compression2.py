@@ -3,6 +3,7 @@ import math
 from collections import Counter
 from typing import List, Dict, Tuple, Sequence
 
+import gensim
 import numpy as np
 import tensorflow as tf
 from sklearn.cluster import AgglomerativeClustering
@@ -250,10 +251,6 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.is_built = False
         self.generator_loss = tf.keras.losses.MeanSquaredError()
         self.discriminator_loss = tf.keras.losses.CosineSimilarity()
-        # self.current_loss = tf.keras.losses.MeanSquaredError()
-        # self.current_loss = tf.keras.losses.Huber()
-        # self.current_loss = tf.keras.losses.LogCosh()
-        # self.current_loss = tf.keras.losses.MeanAbsoluteError()
         self.real_min_v = None
         self.real_mean_v = None
         self.real_max_v = None
@@ -312,31 +309,31 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         self.is_built = True
 
     def compute_generator_loss(self,
-                               generated_input: EagerTensor,
-                               fake_output: EagerTensor):
+                               generated_data: EagerTensor,
+                               real_data: EagerTensor):
         t1 = tf.concat([
-            tf.math.reduce_min(generated_input, axis=0),
-            tf.math.reduce_mean(generated_input, axis=0),
-            tf.math.reduce_variance(generated_input, axis=0),
-            tf.math.reduce_max(generated_input, axis=0),
+            tf.math.reduce_min(generated_data, axis=0),
+            tf.math.reduce_mean(generated_data, axis=0),
+            tf.math.reduce_variance(generated_data, axis=0),
+            tf.math.reduce_max(generated_data, axis=0),
         ], axis=0)
         t2 = tf.concat([
-            tf.math.reduce_min(fake_output, axis=0),
-            tf.math.reduce_mean(fake_output, axis=0),
-            tf.math.reduce_variance(fake_output, axis=0),
-            tf.math.reduce_max(fake_output, axis=0),
+            tf.math.reduce_min(real_data, axis=0),
+            tf.math.reduce_mean(real_data, axis=0),
+            tf.math.reduce_variance(real_data, axis=0),
+            tf.math.reduce_max(real_data, axis=0),
         ], axis=0)
         t3 = tf.concat([
-            tf.math.reduce_min(generated_input, axis=1),
-            tf.math.reduce_mean(generated_input, axis=1),
-            tf.math.reduce_variance(generated_input, axis=1),
-            tf.math.reduce_max(generated_input, axis=1),
+            tf.math.reduce_min(generated_data, axis=1),
+            tf.math.reduce_mean(generated_data, axis=1),
+            tf.math.reduce_variance(generated_data, axis=1),
+            tf.math.reduce_max(generated_data, axis=1),
         ], axis=0)
         t4 = tf.concat([
-            tf.math.reduce_min(fake_output, axis=1),
-            tf.math.reduce_mean(fake_output, axis=1),
-            tf.math.reduce_variance(fake_output, axis=1),
-            tf.math.reduce_max(fake_output, axis=1),
+            tf.math.reduce_min(real_data, axis=1),
+            tf.math.reduce_mean(real_data, axis=1),
+            tf.math.reduce_variance(real_data, axis=1),
+            tf.math.reduce_max(real_data, axis=1),
         ], axis=0)
         return self.generator_loss(t1, t2) + self.generator_loss(t3, t4)
 
@@ -348,8 +345,8 @@ class GenerativeTextCompressionNN(tf.keras.Model):
         # total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
         # print("real_input", real_input.shape, type(real_input))
         # print("real_output", real_output.shape, type(real_output))
-        # print("gen", generated_input.shape, type(generated_input))
-        # print("fake", fake_output.shape, type(fake_output))
+        # print("gen", generated_data.shape, type(generated_data))
+        # print("fake", real_data.shape, type(real_data))
         real_loss = self.discriminator_loss(real_input, real_output)
         fake_loss = self.discriminator_loss(generated_input, fake_output)
         return real_loss + fake_loss
@@ -379,8 +376,8 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             self.fake_max_v = tf.reduce_max(fake_discr_output)
 
             # === Compute Cost Functions Losses === #
-            generator_loss = self.compute_generator_loss(generated_input=generated_batch,
-                                                         fake_output=batch)  # fake_discr_output
+            generator_loss = self.compute_generator_loss(generated_data=generated_batch,
+                                                         real_data=batch)  # fake_discr_output
             discriminator_loss = self.compute_discriminator_loss(real_input=batch,
                                                                  real_output=real_discr_output,
                                                                  generated_input=generated_batch,
@@ -581,8 +578,9 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                corpus: List[str],
                                latent_spaces: np.ndarray,
                                num_topics: int,
-                               keyed_vectors,
+                               keyed_vectors: gensim.models.keyedvectors.KeyedVectors,
                                num_top_words: int = 50) -> List[List[str]]:
+        print(type(keyed_vectors))
         clustering_model = AgglomerativeClustering(
             n_clusters=num_topics,
             affinity="euclidean",  # "euclidean"

@@ -288,7 +288,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
             real_discr_output = self.discriminator(batch)  # training=True
             # print("\n real:", real_output.numpy().shape)
             fake_discr_output = self.discriminator(generated_batch)  # training=True
-            # print("\n fake:", fake_output.numpy().shape)
+            # print("\n fake:", real_data.numpy().shape)
 
             # === Compute Cost Functions Losses === #
             generator_loss = self.compute_generator_loss(generated_input=generated_batch,
