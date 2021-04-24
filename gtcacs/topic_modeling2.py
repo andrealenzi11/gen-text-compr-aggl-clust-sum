@@ -8,7 +8,7 @@ from sklearn.cluster import AgglomerativeClustering
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
-
+from sklearn.cluster import MiniBatchKMeans
 from gtcacs.text_compression2 import GenerativeTextCompressionNN
 
 
@@ -98,10 +98,10 @@ class GTCACS:
         self.discr_learning_rate = discr_learning_rate
         self.random_seed_size = random_seed_size
         self.generator_hidden_dim = generator_hidden_dim
+        self.discriminator_hidden_dim = discriminator_hidden_dim
         self.document_dim = document_dim
         self.latent_space_dim = self.num_topics
         # self.latent_space_dim = latent_space_dim
-        self.discriminator_hidden_dim = discriminator_hidden_dim
 
         # Embeddings optimization Parameters
         self.embeddings = embeddings    # gensim keyed vectors
@@ -171,8 +171,16 @@ class GTCACS:
         corpus_transformed_compressed = self.dim_red_model.get_latent_space(x_new=corpus_transformed)
 
         # === clustering === #
-        self.clusters_labels = self.clustering_model.fit_predict(X=corpus_transformed_compressed,
-                                                                 y=None)
+        try:
+            self.clusters_labels = self.clustering_model.fit_predict(X=corpus_transformed_compressed,
+                                                                     y=None)
+        except MemoryError as ex_mem_clustering:
+            print(str(ex_mem_clustering))
+            self.clustering_model = MiniBatchKMeans(n_clusters=self.num_topics, init='k-means++', max_iter=100,
+                                                    batch_size=256, verbose=0, compute_labels=True, random_state=None,
+                                                    tol=0.0, max_no_improvement=10, n_init=5)
+            self.clusters_labels = self.clustering_model.fit_predict(X=corpus_transformed_compressed,
+                                                                     y=None)
 
         # === extraction of top terms for each topic === #
         self.terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
@@ -182,24 +190,23 @@ class GTCACS:
                                                          num_top_words=self.max_num_words * self.multiplicative_factor)
 
         # === embeddings optimization === #
-        if not self.embeddings:
-            return self.topics_matrix
+        if self.embeddings:
+            result = list()
+            for i, topic in enumerate(self.topics_matrix):
+                original_size = len(topic)
+                topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
+                print(i + 1, ")  words in vocabulary: ", len(topic), " / ", original_size)
+                while len(topic_words) > self.max_num_words:
+                    topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
+                cleaned_topic = list()
+                for word, score in topic:
+                    if word in topic_words:
+                        cleaned_topic.append((word, score))
+                result.append(cleaned_topic)
+            self.topics_matrix = result
+            print([len(row) for row in self.topics_matrix])
 
-        result = list()
-        for i, topic in enumerate(self.topics_matrix):
-            original_size = len(topic)
-            topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
-            print(i + 1, ")  words in vocabulary: ", len(topic), " / ", original_size)
-            while len(topic_words) > self.max_num_words:
-                topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
-            cleaned_topic = list()
-            for word, score in topic:
-                if word in topic_words:
-                    cleaned_topic.append((word, score))
-            result.append(cleaned_topic)
-        self.topics_matrix = result
-        print([len(row) for row in self.topics_matrix])
-
+        # === set fitted flag === #
         self.is_fitted = True
 
     def _check_is_fitted(self):
@@ -212,7 +219,7 @@ class GTCACS:
         """
         self._check_is_fitted()
         # self.topics_distribution = self._compute_topics_distribution(corpus=corpus)
-        corpus_transformed = self.vectorizer_model.fit_transform(X=corpus, y=None)
+        corpus_transformed = self.vectorizer_model.transform(X=corpus)
         return self.dim_red_model.get_latent_space(x_new=corpus_transformed, apply_softmax=apply_softmax)
 
     def get_topics_words(self) -> List[List[Tuple[str, float]]]:
@@ -249,8 +256,8 @@ class GTCACS:
     def _compute_topics_matrix(self,
                                clusters_partition: Dict[str, List[str]],
                                terms_frequencies_map: Dict[str, int],
-                               num_top_words: int = 100) -> List[List[Tuple[str, float]]]:
-        topics_matrix = []
+                               num_top_words: int = 50) -> List[List[Tuple[str, float]]]:
+        topics_matrix = list()
         for label, cluster_corpus in clusters_partition.items():
             top_cluster_tokens = self._compute_top_tokens(corpus=cluster_corpus,
                                                           terms_frequencies_map=terms_frequencies_map,
@@ -259,8 +266,11 @@ class GTCACS:
         return topics_matrix
 
     def _compute_terms_frequencies_map(self, corpus: Sequence[str]) -> Dict[str, int]:
-        vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords,
-                              lowercase=self.lowercase, max_df=1.0, min_df=1, max_features=None, )
+        vec = CountVectorizer(ngram_range=self.ngram_range,
+                              stop_words=self.stopwords,
+                              lowercase=self.lowercase,
+                              max_df=1.0, min_df=1,
+                              max_features=None)
         vec.fit(corpus)
         bag_of_words = vec.transform(corpus)
         sum_words = bag_of_words.sum(axis=0)
@@ -271,13 +281,16 @@ class GTCACS:
                             corpus: Sequence[str],
                             terms_frequencies_map: Dict[str, int],
                             num_top_words: int) -> List[Tuple[str, float]]:
-        vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords,
-                              lowercase=self.lowercase, max_df=1.0, min_df=1, max_features=None)
+        vec = CountVectorizer(ngram_range=self.ngram_range,
+                              stop_words=self.stopwords,
+                              lowercase=self.lowercase,
+                              max_df=1.0, min_df=1,
+                              max_features=None)
         vec.fit(corpus)
         bag_of_words = vec.transform(corpus)
         sum_words = bag_of_words.sum(axis=0)
         corpus_words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
-        corpus_words_freq_normalized = [(term, freq / math.sqrt(terms_frequencies_map[term])) for term, freq in
-                                        corpus_words_freq]
+        corpus_words_freq_normalized = [(term, freq / math.sqrt(terms_frequencies_map[term]))
+                                        for term, freq in corpus_words_freq]
         corpus_words_freq_normalized_sorted = sorted(corpus_words_freq_normalized, key=lambda x: x[1], reverse=True)
         return corpus_words_freq_normalized_sorted[0:num_top_words]
