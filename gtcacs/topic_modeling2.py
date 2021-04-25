@@ -168,9 +168,11 @@ class GTCACS:
         # === dimensional reduction === #
         self._build_compression_network(num_features=corpus_transformed.shape[1])
         self.dim_red_model.train(dataset=corpus_transformed)
-        corpus_transformed_compressed = self.dim_red_model.get_latent_space(x_new=corpus_transformed)
+        corpus_transformed_compressed = self.dim_red_model.get_latent_space(x_new=corpus_transformed,
+                                                                            apply_softmax=False)  # NO probabilities
 
         # === clustering === #
+        print("\n > clustering...")
         try:
             self.clusters_labels = self.clustering_model.fit_predict(X=corpus_transformed_compressed,
                                                                      y=None)
@@ -183,6 +185,7 @@ class GTCACS:
                                                                      y=None)
 
         # === extraction of top terms for each topic === #
+        print("\n > extraction of top terms for each topic...")
         self.terms_frequency_map = self._compute_terms_frequencies_map(corpus=corpus)
         clusters_partition = self._compute_clusters_partition(corpus=corpus)
         self.topics_matrix = self._compute_topics_matrix(clusters_partition=clusters_partition,
@@ -190,19 +193,52 @@ class GTCACS:
                                                          num_top_words=self.max_num_words * self.multiplicative_factor)
 
         # === embeddings optimization === #
+        # if self.embeddings:
+        #     print("\n > embeddings optimization...")
+        #     result = list()
+        #     for i, topic in enumerate(self.topics_matrix):
+        #         original_size = len(topic)
+        #         topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
+        #         print(i + 1, ")  words in vocabulary: ", len(topic_words), " / ", original_size)
+        #         while len(topic_words) > self.max_num_words:
+        #             topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
+        #         print(len(topic_words))
+        #         if len(topic_words) < self.max_num_words:
+        #             for ms in self.embeddings.most_similar(positive=topic_words,
+        #                                                    topn=self.max_num_words-len(topic_words)):
+        #                 topic_words.append(ms)
+        #         print(len(topic_words), topic_words)
+        #         cleaned_topic = list()
+        #         for word, score in topic:
+        #             if word in topic_words:
+        #                 cleaned_topic.append((word, score))
+        #         print(len(cleaned_topic), cleaned_topic)
+        #         result.append(cleaned_topic)
+        #         print()
+        #     del self.topics_matrix
+        #     self.topics_matrix = result
+        #     print([len(row) for row in self.topics_matrix])
         if self.embeddings:
+            print("\n > embeddings optimization...")
             result = list()
             for i, topic in enumerate(self.topics_matrix):
                 original_size = len(topic)
+                # consider only words for which we have an embeddings vector
                 topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
-                print(i + 1, ")  words in vocabulary: ", len(topic), " / ", original_size)
+                print(i + 1, ")  words in vocabulary: ", len(topic_words), " / ", original_size)
+                # removing insignificant words
                 while len(topic_words) > self.max_num_words:
                     topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
-                cleaned_topic = list()
-                for word, score in topic:
-                    if word in topic_words:
-                        cleaned_topic.append((word, score))
-                result.append(cleaned_topic)
+                print(len(topic_words))
+                # add significant words
+                if len(topic_words) < self.max_num_words:
+                    for ms_w, ms_s in self.embeddings.most_similar(positive=topic_words,
+                                                                   topn=self.max_num_words-len(topic_words)):
+                        topic_words.append(ms_w)
+                print(len(topic_words), topic_words)
+                result.append(topic_words)
+                print()
+            del self.topics_matrix
             self.topics_matrix = result
             print([len(row) for row in self.topics_matrix])
 
