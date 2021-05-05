@@ -1,3 +1,4 @@
+import copy
 import math
 from typing import List, Tuple, Dict, Union, Set, Optional, Sequence
 
@@ -5,10 +6,11 @@ import numpy as np
 from gensim.models import KeyedVectors
 from scipy.sparse import csr_matrix
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import MiniBatchKMeans
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
-from sklearn.cluster import MiniBatchKMeans
+
 from gtcacs.text_compression2 import GenerativeTextCompressionNN
 
 
@@ -19,26 +21,27 @@ class GTCACS:
         'Therapy Analytics using a Patient-centered Perspective: an application to Hypothyroidism'
     """
 
-    def __init__(self,
-                 num_topics: int,
-                 max_num_words: int = 50,
-                 max_df: Union[float, int] = 1.0,
-                 min_df: Union[int, float] = 2,
-                 stopwords: Set[str] = None,
-                 ngram_range: Tuple[int, int] = (1, 1),
-                 lowercase: bool = True,
-                 max_features: Union[int, None] = None,
-                 num_epoches: int = 5,
-                 batch_size: int = 64,
-                 gen_learning_rate: float = 0.001,
-                 discr_learning_rate: float = 0.005,
-                 random_seed_size: int = 128,
-                 generator_hidden_dim: int = 256,
-                 discriminator_hidden_dim: int = 256,
-                 document_dim: Optional[int] = None,
-                 # latent_space_dim: int = 64,
-                 embeddings: Optional[KeyedVectors] = None,
-                 ):
+    def __init__(
+            self,
+            num_topics: int,
+            max_num_words: int = 50,
+            max_df: Union[float, int] = 1.0,
+            min_df: Union[int, float] = 2,
+            stopwords: Set[str] = None,
+            ngram_range: Tuple[int, int] = (1, 1),
+            lowercase: bool = True,
+            max_features: Union[int, None] = None,
+            num_epoches: int = 5,
+            batch_size: int = 64,
+            gen_learning_rate: float = 0.001,
+            discr_learning_rate: float = 0.005,
+            random_seed_size: int = 128,
+            generator_hidden_dim: int = 256,
+            discriminator_hidden_dim: int = 256,
+            document_dim: Optional[int] = None,
+            # latent_space_dim: int = 64,
+            embeddings: Optional[KeyedVectors] = None,
+    ):
         """
             Initialization
 
@@ -46,37 +49,53 @@ class GTCACS:
             ----------
             num_topics : (*int*)
                 number of topics
-            max_num_words :
+
+            max_num_words : (*int*)
                 maximum number of terms to consider for topic
-            max_df :
+
+            max_df : (*Union[float, int]*)
                 maximum document frequency
-            min_df :
+
+            min_df : (*Union[float, int]*)
                 minimum document frequency
-            stopwords :
+
+            stopwords : (*Set[str]*)
                 stopwords set
-            ngram_range:
+
+            ngram_range: (**)
                 range for ngram
-            lowercase:
+
+            lowercase: (**)
                 flag for convert to lowercase
-            max_features:
+
+            max_features: (**)
                 maximum number of terms to consider (max vocabulary size)
-            num_epoches:
+
+            num_epoches: (**)
                 number of epochs
-            batch_size:
+
+            batch_size: (**)
                 number of documents in a batch
-            gen_learning_rate:
+
+            gen_learning_rate: (**)
                 learning rate for optimize the generative part
-            discr_learning_rate:
+
+            discr_learning_rate: (**)
                 learning rate for optimize the discriminative part
-            random_seed_size:
+
+            random_seed_size: (**)
                 dimension of generator input layer
-            generator_hidden_dim:
+
+            generator_hidden_dim: (**)
                 dimension of generator hidden layer
-            document_dim:
+
+            document_dim: (**)
                 dimension of generator output layer and discriminator's input/output layer
-            #latent_space_dim:
+
+            #latent_space_dim: (**)
                 dimension of discriminator latent space
-            discriminator_hidden_dim:
+
+            discriminator_hidden_dim: (**)
                 dimension of discriminator hidden layer
         """
 
@@ -104,7 +123,7 @@ class GTCACS:
         # self.latent_space_dim = latent_space_dim
 
         # Embeddings optimization Parameters
-        self.embeddings = embeddings    # gensim keyed vectors
+        self.embeddings = embeddings  # gensim keyed vectors
         if self.embeddings:
             self.multiplicative_factor = 3
         else:
@@ -118,11 +137,14 @@ class GTCACS:
         self.topics_matrix = None
         self.topics_distribution = None
 
-        # models
+        # Models that will be fitted on data
         self.vectorizer_model = Pipeline(
             steps=[
-                ("vect", TfidfVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords,
-                                         max_df=self.max_df, min_df=self.min_df, lowercase=self.lowercase,
+                ("vect", TfidfVectorizer(ngram_range=self.ngram_range,
+                                         stop_words=self.stopwords,
+                                         max_df=self.max_df,
+                                         min_df=self.min_df,
+                                         lowercase=self.lowercase,
                                          max_features=self.max_features)),
                 ("dense", FunctionTransformer(csr_matrix.todense))
             ]
@@ -164,6 +186,8 @@ class GTCACS:
         """
         # === text encoding === #
         corpus_transformed = self.vectorizer_model.fit_transform(X=corpus, y=None)
+        print(f"\t - corpus size: {corpus_transformed.shape[0]}")
+        print(f"\t - vocabulary size: {corpus_transformed.shape[1]}")
 
         # === dimensional reduction === #
         self._build_compression_network(num_features=corpus_transformed.shape[1])
@@ -178,9 +202,16 @@ class GTCACS:
                                                                      y=None)
         except MemoryError as ex_mem_clustering:
             print(str(ex_mem_clustering))
-            self.clustering_model = MiniBatchKMeans(n_clusters=self.num_topics, init='k-means++', max_iter=100,
-                                                    batch_size=256, verbose=0, compute_labels=True, random_state=None,
-                                                    tol=0.0, max_no_improvement=10, n_init=5)
+            self.clustering_model = MiniBatchKMeans(n_clusters=self.num_topics,
+                                                    init='k-means++',
+                                                    max_iter=100,
+                                                    batch_size=256,
+                                                    verbose=0,
+                                                    compute_labels=True,
+                                                    random_state=None,
+                                                    tol=0.0,
+                                                    max_no_improvement=10,
+                                                    n_init=5)
             self.clusters_labels = self.clustering_model.fit_predict(X=corpus_transformed_compressed,
                                                                      y=None)
 
@@ -192,55 +223,14 @@ class GTCACS:
                                                          terms_frequencies_map=self.terms_frequency_map,
                                                          num_top_words=self.max_num_words * self.multiplicative_factor)
 
-        # === embeddings optimization === #
-        # if self.embeddings:
-        #     print("\n > embeddings optimization...")
-        #     result = list()
-        #     for i, topic in enumerate(self.topics_matrix):
-        #         original_size = len(topic)
-        #         topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
-        #         print(i + 1, ")  words in vocabulary: ", len(topic_words), " / ", original_size)
-        #         while len(topic_words) > self.max_num_words:
-        #             topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
-        #         print(len(topic_words))
-        #         if len(topic_words) < self.max_num_words:
-        #             for ms in self.embeddings.most_similar(positive=topic_words,
-        #                                                    topn=self.max_num_words-len(topic_words)):
-        #                 topic_words.append(ms)
-        #         print(len(topic_words), topic_words)
-        #         cleaned_topic = list()
-        #         for word, score in topic:
-        #             if word in topic_words:
-        #                 cleaned_topic.append((word, score))
-        #         print(len(cleaned_topic), cleaned_topic)
-        #         result.append(cleaned_topic)
-        #         print()
-        #     del self.topics_matrix
-        #     self.topics_matrix = result
-        #     print([len(row) for row in self.topics_matrix])
+        # === perform embeddings optimization === #
         if self.embeddings:
             print("\n > embeddings optimization...")
-            result = list()
-            for i, topic in enumerate(self.topics_matrix):
-                original_size = len(topic)
-                # consider only words for which we have an embeddings vector
-                topic_words = [word for word, score in topic.copy() if word in self.embeddings.vocab]
-                print(i + 1, ")  words in vocabulary: ", len(topic_words), " / ", original_size)
-                # removing insignificant words
-                while len(topic_words) > self.max_num_words:
-                    topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
-                print(len(topic_words))
-                # add significant words
-                if len(topic_words) < self.max_num_words:
-                    for ms_w, ms_s in self.embeddings.most_similar(positive=topic_words,
-                                                                   topn=self.max_num_words-len(topic_words)):
-                        topic_words.append(ms_w)
-                print(len(topic_words), topic_words)
-                result.append(topic_words)
-                print()
-            del self.topics_matrix
-            self.topics_matrix = result
-            print([len(row) for row in self.topics_matrix])
+            self._apply_embeddings_optimization()
+
+        # === NOT apply embeddings optimization, so transform the topics matrix (remove the scores)
+        else:
+            self.topics_matrix = [[w for w, s in topic_row] for topic_row in copy.deepcopy(self.topics_matrix)]
 
         # === set fitted flag === #
         self.is_fitted = True
@@ -254,31 +244,15 @@ class GTCACS:
             Return the topics distribution scores in the corpus
         """
         self._check_is_fitted()
-        # self.topics_distribution = self._compute_topics_distribution(corpus=corpus)
         corpus_transformed = self.vectorizer_model.transform(X=corpus)
         return self.dim_red_model.get_latent_space(x_new=corpus_transformed, apply_softmax=apply_softmax)
 
-    def get_topics_words(self) -> List[List[Tuple[str, float]]]:
+    def get_topics_words(self) -> List[List[str]]:
         """
             Return the clusters of terms representing discussion topics
         """
         self._check_is_fitted()
         return self.topics_matrix
-
-    # def _compute_topics_distribution(self, corpus: Sequence[str]) -> np.ndarray:
-    #     vec = CountVectorizer(ngram_range=self.ngram_range, stop_words=self.stopwords, lowercase=self.lowercase,
-    #                           max_df=self.max_df, min_df=self.min_df, max_features=self.max_features)
-    #     word_tokenizer_fun = vec.build_tokenizer()
-    #     topics_matrix_tmp = [dict(topic_list) for topic_list in self.topics_matrix]
-    #     result = np.zeros(shape=(len(corpus), self.num_topics))
-    #     for i, doc in enumerate(corpus):
-    #         for token in word_tokenizer_fun(doc):
-    #             for j, topic in enumerate(topics_matrix_tmp):
-    #                 try:
-    #                     result[i, j] += topic[token]
-    #                 except KeyError:
-    #                     continue
-    #     return result
 
     def _compute_clusters_partition(self, corpus: Sequence[str]) -> Dict[str, List[str]]:
         clusters_partition = dict()
@@ -330,3 +304,29 @@ class GTCACS:
                                         for term, freq in corpus_words_freq]
         corpus_words_freq_normalized_sorted = sorted(corpus_words_freq_normalized, key=lambda x: x[1], reverse=True)
         return corpus_words_freq_normalized_sorted[0:num_top_words]
+
+    def _apply_embeddings_optimization(self):
+        result = list()
+        for i, topic in enumerate(self.topics_matrix):
+            original_size = len(topic)
+
+            # === Consider only words for which we have an embeddings vector === #
+            try:
+                topic_words = [word for word, score in copy.deepcopy(topic) if word in self.embeddings.vocab]
+            except AttributeError:
+                topic_words = [word for word, score in copy.deepcopy(topic) if word in self.embeddings.key_to_index]
+            print(i + 1, ")  words in vocabulary: ", len(topic_words), " / ", original_size)
+
+            # === Removing insignificant words === #
+            while len(topic_words) > self.max_num_words:
+                topic_words.remove(self.embeddings.doesnt_match(words=topic_words))
+
+            # === Add significant words === #
+            if len(topic_words) < self.max_num_words:
+                for ms_w, ms_s in self.embeddings.most_similar(positive=topic_words,
+                                                               topn=self.max_num_words - len(topic_words)):
+                    topic_words.append(ms_w)
+            result.append(topic_words)
+
+        del self.topics_matrix
+        self.topics_matrix = result

@@ -8,7 +8,6 @@ import numpy as np
 import tensorflow as tf
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 from tensorflow.python.framework.ops import EagerTensor
 from tensorflow.python.keras.constraints import MinMaxNorm
 from tqdm import tqdm
@@ -176,16 +175,10 @@ class Discriminator(tf.keras.Model):
         """
             Encoding: from input samples to compressed latent spaces vectors
         """
-        # print(inputs.shape)
         x = self.encoder_input_dropout(inputs)
-        # print(x.shape)
         x = self.encoder_hidden1(x)
-        # print(x.shape)
         x = self.encoder_hidden1_dropout(x)
-        # print(x.shape)
         x = self.encoder_output(x)
-        # print(x.shape)
-        # print("\n")
         return x
 
     def decode(self, inputs):
@@ -342,7 +335,6 @@ class GenerativeTextCompressionNN(tf.keras.Model):
                                    real_output: EagerTensor,
                                    generated_input: EagerTensor,
                                    fake_output: EagerTensor):
-        # total_loss = -(tf.abs(real_loss) + tf.abs(fake_loss))
         # print("real_input", real_input.shape, type(real_input))
         # print("real_output", real_output.shape, type(real_output))
         # print("gen", generated_data.shape, type(generated_data))
@@ -353,7 +345,7 @@ class GenerativeTextCompressionNN(tf.keras.Model):
 
     def training_step(self,
                       batch: EagerTensor,
-                      batch_size: int):
+                      batch_size: int, ):
         self._check_built_status()
         with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
             # === Produce startup noise tensor === #
@@ -367,17 +359,17 @@ class GenerativeTextCompressionNN(tf.keras.Model):
 
             # === Calculate 'Real Output' / 'Fake Output' tensors for the discriminator === #
             real_discr_output = self.discriminator(batch)  # training=True
-            self.real_min_v = tf.reduce_min(real_discr_output)
-            self.real_mean_v = tf.reduce_mean(real_discr_output)
-            self.real_max_v = tf.reduce_max(real_discr_output)
+            self.real_min_v = tf.reduce_min(batch)
+            self.real_mean_v = tf.reduce_mean(batch)
+            self.real_max_v = tf.reduce_max(batch)
             fake_discr_output = self.discriminator(generated_batch)  # training=True
-            self.fake_min_v = tf.reduce_min(fake_discr_output)
-            self.fake_mean_v = tf.reduce_mean(fake_discr_output)
-            self.fake_max_v = tf.reduce_max(fake_discr_output)
+            self.fake_min_v = tf.reduce_min(generated_batch)
+            self.fake_mean_v = tf.reduce_mean(generated_batch)
+            self.fake_max_v = tf.reduce_max(generated_batch)
 
             # === Compute Cost Functions Losses === #
             generator_loss = self.compute_generator_loss(generated_data=generated_batch,
-                                                         real_data=batch)  # fake_discr_output
+                                                         real_data=batch)
             discriminator_loss = self.compute_discriminator_loss(real_input=batch,
                                                                  real_output=real_discr_output,
                                                                  generated_input=generated_batch,
