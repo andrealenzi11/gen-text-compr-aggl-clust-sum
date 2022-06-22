@@ -31,7 +31,7 @@ setup(
     install_requires=[
         'scikit-learn==0.*',
         'tqdm==4.*',
-        'numpy==1.19.*',
+        'numpy>=1.19,<1.23',
         'tensorflow==2.*',
     ],
     classifiers=[
